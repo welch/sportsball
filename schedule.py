@@ -49,7 +49,8 @@ class Schedule(db.Model):
         Returns: Schedule object for the current schedule
         """
         sched = cls.all().filter("url ==", url).get()
-        if not sched or sched.timestamp < datetime.now() - max_age:
+        if (not sched or not sched.json or 
+            sched.timestamp < datetime.now() - max_age):
             sched = cls.refresh(url=url)
         if not sched:
             logging.error("cannot fetch sched.json from DataStore")
@@ -69,7 +70,10 @@ class Schedule(db.Model):
         if not sched:
             sched = cls()
             sched.url = url
-        sched.json = json.dumps(cls.get_feed(url))
+            sched.json = None
+        events = cls.get_feed(url)
+        if events: 
+            sched.json = json.dumps(events) 
         sched.put()
         return sched
 
@@ -79,7 +83,8 @@ class Schedule(db.Model):
         fetch the giants schedule as a remote csv file, parse it, 
         compute is_home, is_here, and them fields for each event.
 
-        Returns: a sorted list of event dictionaries.
+        Returns: a sorted list of event dictionaries, or None
+        if there is a problem (eg, an http timeout. they happen.)
         """
         sched = []
         logging.info("get_feed %s" % url)
@@ -106,8 +111,8 @@ class Schedule(db.Model):
     def get_events(self, min_isodate=None):
         """
         decode our json into a dictionary of event dictionaries keyed
-        by isodate string, limited by min_date, which is treated as
-        today if non-null.  cache the parsed dictionary so it is fast
+        by isodate string, limited by min_isodate, which is treated as
+        today if null.  cache the parsed dictionary so it is fast
         for others during the lifetime of this app.
 
         Returns: list of event dictionaries.
