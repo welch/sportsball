@@ -29,7 +29,7 @@ class Schedule(db.Model):
         return an iso8601-formatted date string for today in pacific time.
         """
         # GAE runs dates as UTC0, but Giants baseball runs at Pacific Time.
-        return (date.today() - timedelta(hours=7)).isoformat()
+        return (datetime.now() - timedelta(hours=7)).date().isoformat()
 
     @staticmethod
     def now():

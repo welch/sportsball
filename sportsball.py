@@ -37,8 +37,8 @@ class EightballPage(webapp2.RequestHandler):
             isodate = Schedule.today()
         sched = Schedule.get()
         e = sched.get_next_home_event(isodate)
-        logging.info("for isodatetime %s, next home event is %s" % (
-                Schedule.now(), str(e)))
+        logging.info("for isodate %s, isodatetime %s, next home event is %s" % (
+                isodate, Schedule.now(), str(e)))
         is_home = e and e['date'] == isodate
         message = sched_message(isodate)
         self.response.write(
