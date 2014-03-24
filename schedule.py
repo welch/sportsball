@@ -9,7 +9,7 @@ import json
 from datetime import datetime, timedelta, date
 from google.appengine.ext import db
 
-SCHED_URL = 'http://mlb.mlb.com/soa/ical/schedule.csv?team_id=137&season=2013'
+SCHED_URL = 'http://mlb.mlb.com/soa/ical/schedule.csv?team_id=137&season=2014'
 
 class Schedule(db.Model):
     """
