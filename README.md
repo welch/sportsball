@@ -45,9 +45,7 @@ answering today's schedule question.
 To upload this application to your Google App Engine hosting
 environment, you'll first need to apply for a unique applictation
 id/name for your deployed app via your console at https://appengine.google.com/ .
-You will also create an application-specific password, which you will use
-in the upload step below. Change the first line of the `app.yaml` file in
-this directory to
+Change the first line of the `app.yaml` file in this directory to
 
 ```
 application: your-app-name
