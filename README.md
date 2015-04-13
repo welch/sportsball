@@ -43,7 +43,7 @@ answering today's schedule question.
 ### Uploading to GAE
 
 To upload this application to your Google App Engine hosting
-environment, you'll first need to apply for a unique applictation
+environment, you'll first need to apply for a unique application
 id/name for your deployed app via your console at https://appengine.google.com/ .
 Change the first line of the `app.yaml` file in this directory to
 
