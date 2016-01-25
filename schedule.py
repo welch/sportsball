@@ -9,7 +9,6 @@ import json
 from datetime import datetime, timedelta, date
 from pytz import timezone, utc
 from google.appengine.ext import db
-
 SCHED_URL = 'http://mlb.mlb.com/soa/ical/schedule.csv?team_id=137&season=2015'
 
 # for sanity, all date/time storage and manipulations will be in AT&T
@@ -33,24 +32,25 @@ def attnow():
 
 class Schedule(db.Model):
     """
-    save a json-encoded schedule as a long string in the DataStore.
-    we'll serve this to javascript clients wanting to display event
-    information.
+    Factory for schedule instances backed by entities in the datastore.
+    Don't instantiate this class -- use Schedule.get() to retrieve an
+    instance by url.
+
     """
     url =  db.StringProperty() # feed url, also used as primary key
     json = db.TextProperty()
     timestamp = db.DateTimeProperty(auto_now=True)
-
-    _events = {} # event lists cached by url+isodate
+    _events = {} # event lists cached by isodate
 
     @classmethod
     def get(cls, url=SCHED_URL, max_age=timedelta(days=1)):
         """
-        fetch the currently cached schedule from the datastore. If it does
-        not exist, or is over max_age old, update it from the url feed before
-        returning.
+        fetch the cached schedule for this url from the datastore. If it
+        does not exist, or is over max_age old, refresh it from the
+        url feed before returning.
 
-        Returns: Schedule object for the current schedule
+        Returns: Schedule instance for the url
+
         """
         sched = cls.all().filter("url ==", url).get()
         if (not sched or not sched.json or
@@ -64,63 +64,33 @@ class Schedule(db.Model):
     @classmethod
     def refresh(cls, url=SCHED_URL):
         """
-        update our cached, parsed schedule.json from the feed url and
-        store it in DataStore, creating the Schedule object if
-        necessary.
+        update our schedule.json from the feed url and store it in
+        DataStore, creating a persistent Schedule object if necessary.
 
-        Returns: fresh Schedule object for the current schedule
+        Returns: Schedule instance with refreshed schedule json.
+
         """
         sched = cls.all().filter("url ==", url).get()
         if not sched:
             sched = cls()
             sched.url = url
             sched.json = None
-        events = cls.get_feed(url)
+            sched._events = {} # cache for parsed events, not persisted.
+        events = get_feed(url)
         if events:
             sched.json = json.dumps(events)
+            sched._events = {}
         sched.put()
         return sched
 
-    @staticmethod
-    def get_feed(url=SCHED_URL):
-        """
-        fetch the giants schedule as a remote csv file, parse it,
-        compute is_home, is_here, and them fields for each event.
-
-        Returns: a sorted list of event dictionaries, or None
-        if there is a problem (eg, an http timeout. they happen.)
-        """
-        sched = []
-        logging.info("get_feed %s" % url)
-        try:
-            sched_csv = csv.DictReader(urllib.urlopen(url))
-            sched_csv.fieldnames = [f.lower() for f in sched_csv.fieldnames]
-            for row in sched_csv:
-                # Giants csv schedule is given as Pacific timezone
-                date = datetime.strptime(row['start date'], "%m/%d/%y").date()
-                is_home = (row['subject'].endswith("Giants"))
-                them = row['subject'].split(" at ")[0 if is_home else 1]
-                sched.append({
-                    'date': date.isoformat(),
-                    'time': row['start time'],
-                    'is_home': is_home,
-                    'is_here': (row['location'] == 'AT&T Park'),
-                    'location': row['location'],
-                    'them': them
-                    })
-        except Exception, e:
-            logging.error("can't download/parse schedule: " + str(e))
-            return None
-        return sched
-
     def get_events(self, min_isodate=None):
-        """
-        decode our json into a dictionary of event dictionaries keyed
-        by isodate string, limited by min_isodate, which is treated as
-        today if null.  cache the parsed dictionary so it is fast
-        for others during the lifetime of this app.
+        """decode instance json into a dictionary of event dictionaries keyed
+        by isodate string, limited by min_isodate (today if null).
+        Cache the parsed dictionary for speed during the lifetime of
+        this app.
 
-        Returns: list of event dictionaries.
+        Returns: list of event dictionaries for given date and beyond
+
         """
         if not min_isodate:
             min_isodate = attnow().date().isoformat()
@@ -176,3 +146,34 @@ class Schedule(db.Model):
                 break
             isodate = Schedule.next_isodate(isodate)
         return isodate
+
+def get_feed(url=SCHED_URL):
+    """
+    fetch the giants schedule as a remote csv file, parse it,
+    and create a list of events from it.
+
+    Returns: a sorted list of event dictionaries, or None
+    if there is a problem (eg, an http timeout. they happen.)
+    """
+    sched = []
+    logging.info("get_feed %s" % url)
+    try:
+        sched_csv = csv.DictReader(urllib.urlopen(url))
+        sched_csv.fieldnames = [f.lower() for f in sched_csv.fieldnames]
+        for row in sched_csv:
+            # Giants csv schedule is given as Pacific timezone
+            date = datetime.strptime(row['start date'], "%m/%d/%y").date()
+            is_home = (row['subject'].endswith("Giants"))
+            them = row['subject'].split(" at ")[0 if is_home else 1]
+            sched.append({
+                'date': date.isoformat(),
+                'time': row['start time'],
+                'is_home': is_home,
+                'is_here': (row['location'] == 'AT&T Park'),
+                'location': row['location'],
+                'them': them
+                })
+    except Exception, e:
+        logging.error("can't download/parse schedule: " + str(e))
+        return None
+    return sched
