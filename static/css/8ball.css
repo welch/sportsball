@@ -1,20 +1,20 @@
 body {
-    font-family: 'Permanent Marker', arial, sans-serif; 
-    font-size: 30px; 
-    text-align:center; 
-    width:80%; 
+    font-family: 'Permanent Marker', arial, sans-serif;
+    font-size: 20px;
+    text-align:center;
+    width:80%;
     margin:0 auto;
 }
-.home { 
-    color: #D2612F; 
+.home {
+    color: #D2612F;
 }
-.away { 
-    color: #000; 
+.away {
+    color: #000;
 }
-.bigorange { 
-    color: #D2612F; 
-    font-size: 100px; 
+.bigorange {
+    color: #D2612F;
+    font-size: 50px;
 }
 h1 {
-    font-size: 60px; 
+    font-size: 40px;
 }

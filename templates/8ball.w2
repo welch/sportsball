@@ -2,19 +2,24 @@
 <html>
   <head>
     <meta charset="utf-8" />
-    <meta name="description" content="Is my day screwed? Is there a Giants home game today?" />
-    <meta name="keywords" content="giants, san francisco, san francisco giants, sfgiants, schedule, mlb, baseball, major league baseball" />
-    <meta property="og:title" content="Is my day screwed? Is there a Giants home game today?" />
+    <meta name="description" content="Is my day fucked? Is there a Giants home game today? How long are they playing in San Francisco this time?" />
+    <meta property="og:title" content="Is my day fucked? Is there a Giants home game today?" />
     <title>Is my day {{ verb }}?</title>
-    <link href='http://fonts.googleapis.com/css?family=Permanent+Marker' 
-	  rel='stylesheet' type='text/css' />
+    <link href='http://fonts.googleapis.com/css?family=Permanent+Marker'
+          rel='stylesheet' type='text/css' />
     <link href='/css/8ball.css' rel='stylesheet' type='text/css' />
+    <!--
+
+         Want to improve this sportsball schedule tracker?
+         Fork me on github! https://github.com/welch/sportsball
+
+      -->
   </head>
   <body>
     {% if is_home %}
     <h1>Is my day <span class='bigorange'>{{ verb }}?</span></h1>
     <div class='home'>
-      <img src="/img/8ball-yes-1.gif" width='380' height='356'  alt="Yes">
+      <img src="/img/8ball-yes-1.gif" width='216' height='215'  alt="Yes">
       <br><br>
       {{ today }}
       <br>
@@ -23,7 +28,7 @@
     {% else %}
     <h1>Is my day {{ verb }}?</h1>
     <div class='away'>
-      <img src="/img/8ball-no-1.gif" width='380' height='356' alt="No">
+      <img src="/img/8ball-no-1.gif" width='216' height='215' alt="No">
       <br><br>
       {{ today }}
       <br>
