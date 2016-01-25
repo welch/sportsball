@@ -141,7 +141,7 @@ class Schedule(db.Model):
         Returns: an isodate string
         """
         if isodate is None:
-            isodate = Schedule.today()
+            isodate = attnow().date().isoformat()
         schedule = self.get_events(isodate)
         for i in xrange(len(schedule)):
             if (not schedule[i]['is_here'] or isodate != schedule[i]['date']):
