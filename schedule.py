@@ -45,10 +45,10 @@ class Schedule(db.Model):
     _events = {} # event lists cached by isodate
 
     @classmethod
-    def get(cls, url=SCHED_URL, max_age=timedelta(days=1)):
+    def get(cls, url=SCHED_URL, every_secs=(24 * 3600)):
         """
         fetch the cached schedule for this url from the datastore. If it
-        does not exist, or is over max_age old, refresh it from the
+        does not exist, or is over every_secs seconds old, refresh it from the
         url feed before returning.
 
         Returns: Schedule instance for the url
@@ -56,7 +56,7 @@ class Schedule(db.Model):
         """
         sched = cls.all().filter("url ==", url).get()
         if (not sched or not sched.json or
-            sched.timestamp < datetime.now() - max_age):
+            sched.timestamp < datetime.now() - timedelta(seconds=every_secs)):
             sched = cls.refresh(url=url)
         if not sched:
             logging.error("cannot fetch sched.json from DataStore")

@@ -55,10 +55,17 @@ class SchedulePage(webapp2.RequestHandler):
         self.response.headers['Content-Type'] = 'application/json'
         self.response.write(sched.json)
 
+class RefreshPage(webapp2.RequestHandler):
+    def get(self):
+        sched = Schedule.get(every_secs = 10) # a little DOS protection here
+        self.response.headers['Content-Type'] = 'application/json'
+        self.response.write("Refreshed schedule\n")
+
 app = webapp2.WSGIApplication([
-        webapp2.Route('/schedule.json', handler=SchedulePage),
-        webapp2.Route('/<verb>/<isodate>', handler=EightballPage),
-        webapp2.Route('/<verb>/', handler=EightballPage),
-        webapp2.Route('/<isodate>', handler=EightballPage),
-        webapp2.Route('/', handler=EightballPage)],
-                              debug=True)
+    webapp2.Route('/schedule.json', handler=SchedulePage),
+    webapp2.Route('/refresh', handler=RefreshPage),
+    webapp2.Route('/<verb>/<isodate>', handler=EightballPage),
+    webapp2.Route('/<verb>/', handler=EightballPage),
+    webapp2.Route('/<isodate>', handler=EightballPage),
+    webapp2.Route('/', handler=EightballPage)
+])
