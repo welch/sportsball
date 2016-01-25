@@ -1,4 +1,4 @@
-from schedule import Schedule
+from schedule import Schedule, attnow
 from google.appengine.ext.webapp import template
 import webapp2
 import logging
@@ -10,7 +10,7 @@ def sched_message(isodate=None):
     as a list of strings (one per line)
     """
     if not isodate:
-        isodate = Schedule.today()
+        isodate = attnow().date().isoformat()
     sched = Schedule.get()
     e = sched.get_next_home_event(isodate)
     if not e:
@@ -18,7 +18,7 @@ def sched_message(isodate=None):
     elif e['date'] != isodate:
         return ['No home game today!',
                 'All quiet until %s, %s, when Giants play %s at %s' % (
-                Schedule.day_of_isodate(e['date']), 
+                Schedule.day_of_isodate(e['date']),
                 e['date'], e['them'], e['time'])]
     else:
         quiet = sched.get_next_non_home_day(isodate)
@@ -34,19 +34,19 @@ class IndexPage(webapp2.RequestHandler):
 class EightballPage(webapp2.RequestHandler):
     def get(self, verb="hosed", isodate=None):
         if not isodate:
-            isodate = Schedule.today()
+            isodate = attnow().date().isoformat()
         sched = Schedule.get()
         e = sched.get_next_home_event(isodate)
         logging.info("for isodate %s, isodatetime %s, next home event is %s" % (
-                isodate, Schedule.now(), str(e)))
+                isodate, attnow(), str(e)))
         is_home = e and e['date'] == isodate
         message = sched_message(isodate)
         self.response.write(
-            template.render('templates/8ball.w2', { 
-                    'verb': verb, 
+            template.render('templates/8ball.w2', {
+                    'verb': verb,
                     'is_home': is_home,
                     'today': message[0],
-                    'tomorrow': message[1] 
+                    'tomorrow': message[1]
                     }))
 
 class SchedulePage(webapp2.RequestHandler):
