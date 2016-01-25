@@ -2,14 +2,14 @@
 
 ### (aka "Is My Day @#$%#'d?")
 
-_Sportsball_ is a Google App Engine application for sportsball
-schedule-reporting websites like giant8ball.com.  These web pages
-speak to the central question of life in San Francisco's South Beach
-neighborhood -- is my day going to be hosed by a Giants home game and
-those who love them?
+_Sportsball_ is a Google App Engine application for my sportsball
+schedule-reporting websites like [giant8ball.com](http://giant8ball.com).
+These web pages speak to the central question of life in San Francisco's
+South Beach neighborhood -- is my day going to be hosed by a Giants home game
+and those who love them?
 
-Giants schedule url:
-http://mlb.mlb.com/soa/ical/schedule.csv?team_id=137&season=2014
+Giants schedule url (iCal):
+http://mlb.am/tix/giants_schedule_full
 
 ### Local installation and testing
 
@@ -26,19 +26,11 @@ You can test this locally by running (from this directory):
 > dev_appserver.py .
 ```
 
-There is a 100% chance that when you run this after first installing
-the SDK, you'll error out on an SSL certificate validation. Let me
-save you the StackOverflow search, and suggest you do this:
-
-```
-> cd /Applications/GoogleAppEngineLauncher.app/Contents/Resources/GoogleAppEngine-default.bundle/Contents/Resources/google_appengine/lib/cacerts/
-> rm cacerts.txt
-> rm urlfetch_cacerts.txt
-```
-
-Back? Okay... fire up dev_appserver.py as above, connect to
-http://localhost:8080, and you should be presented with a giant 8-ball
-answering today's schedule question.
+Connect to http://localhost:8080, and you should be presented with a
+giant 8-ball answering today's schedule question. It's not pretty --
+this project was to get a little experience with a long-lived
+application on GAE, not presentation. Contributions improving the user
+experience are most welcome.
 
 ### Uploading to GAE
 
@@ -62,4 +54,3 @@ lets you autheticate to the appengine service, thereafter the credentials
 are cached (see https://developers.google.com/appengine/docs/python/tools/uploadinganapp#Python_Password-less_login_with_OAuth2 for more).
 
 If all was successfull, your app is now up and running in the cloud.
-
