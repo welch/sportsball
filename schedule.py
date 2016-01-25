@@ -1,15 +1,17 @@
 #
 # giants schedule manager. we cache a parsed, processed version
-# of their csv schedule feed as a DataStore object.
+# of their ical schedule feed as a DataStore object.
 #
-import urllib
-import csv
 import logging
 import json
 from datetime import datetime, timedelta, date
 from pytz import timezone, utc
 from google.appengine.ext import db
-SCHED_URL = 'http://mlb.mlb.com/soa/ical/schedule.csv?team_id=137&season=2015'
+from ics import Calendar
+from urllib2 import urlopen
+
+# This iCal URL will be updated throughout the season as schedules change
+SCHED_URL = 'http://mlb.am/tix/giants_schedule_full'
 
 # for sanity, all date/time storage and manipulations will be in AT&T
 # Park's local TZ
@@ -17,7 +19,7 @@ ATT_TZ = timezone('US/Pacific')
 
 def localize(dt):
     """
-    set tzinfo for dt to the local timezone, converting if it already
+    set tzinfo for dt to ATT&T Park timezone, converting if it already
     has tzinfo set.
     """
     if dt.tzinfo == None:
@@ -158,21 +160,22 @@ def get_feed(url=SCHED_URL):
     sched = []
     logging.info("get_feed %s" % url)
     try:
-        sched_csv = csv.DictReader(urllib.urlopen(url))
-        sched_csv.fieldnames = [f.lower() for f in sched_csv.fieldnames]
-        for row in sched_csv:
-            # Giants csv schedule is given as Pacific timezone
-            date = datetime.strptime(row['start date'], "%m/%d/%y").date()
-            is_home = (row['subject'].endswith("Giants"))
-            them = row['subject'].split(" at ")[0 if is_home else 1]
+        c = Calendar(urlopen(SCHED_URL).read().decode('iso-8859-1'))
+        for event in c.events:
+            if event.name.startswith("FINAL"):
+                continue # skip games already played
+            event.begin = localize(event.begin)
+            is_home = (event.name.endswith("Giants"))
+            is_here = event.location.startswith('AT&T') # ignore homes in AZ
+            them = event.name.split(" vs. ")[0 if is_home else 1]
             sched.append({
-                'date': date.isoformat(),
-                'time': row['start time'],
+                'date': event.begin.date().isoformat(),
+                'time': event.begin.time().isoformat(),
                 'is_home': is_home,
-                'is_here': (row['location'] == 'AT&T Park'),
-                'location': row['location'],
+                'is_here': is_here,
+                'location': event.location,
                 'them': them
-                })
+            })
     except Exception, e:
         logging.error("can't download/parse schedule: " + str(e))
         return None
