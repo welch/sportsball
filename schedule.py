@@ -104,17 +104,17 @@ class Schedule(db.Model):
         self._events[min_isodate] = schedule
         return schedule
 
-    def get_next_home_event(self, isodate=None):
+    def get_next_here_event(self, isodate=None):
         """
         return an event dictionary for the earliest event on or after
         the given date, or None if no events are scheduled.
         If isodate is None, use today
 
-        Returns: an event dictionary, or none if no more home games scheduled
+        Returns: an event dictionary, or none if no more games scheduled for here
         """
         schedule = self.get_events(isodate)
         for i in xrange(len(schedule)):
-            if schedule[i]['is_home']:
+            if schedule[i]['is_here']:
                 return schedule[i]
         return None
 
@@ -133,10 +133,10 @@ class Schedule(db.Model):
         """
         return datetime.strptime(iso, "%Y-%m-%d").strftime("%A")
 
-    def get_next_non_home_day(self, isodate=None):
+    def get_next_non_here_day(self, isodate=None):
         """
         return the earliest day on or after the given date having no
-        home event. If isodate is None, use today.
+        event here. If isodate is None, use today.
 
         Returns: an isodate string
         """
@@ -144,7 +144,7 @@ class Schedule(db.Model):
             isodate = Schedule.today()
         schedule = self.get_events(isodate)
         for i in xrange(len(schedule)):
-            if (not schedule[i]['is_home'] or isodate != schedule[i]['date']):
+            if (not schedule[i]['is_here'] or isodate != schedule[i]['date']):
                 break
             isodate = Schedule.next_isodate(isodate)
         return isodate
@@ -166,7 +166,7 @@ def get_feed(url=SCHED_URL):
                 continue # skip games already played
             event.begin = localize(event.begin)
             is_home = (event.name.endswith("Giants"))
-            is_here = event.location.startswith('AT&T') # ignore homes in AZ
+            is_here = event.location.startswith('AT&T')
             them = event.name.split(" vs. ")[0 if is_home else 1]
             sched.append({
                 'date': event.begin.date().isoformat(),

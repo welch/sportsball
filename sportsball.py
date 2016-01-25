@@ -12,7 +12,7 @@ def sched_message(isodate=None):
     if not isodate:
         isodate = attnow().date().isoformat()
     sched = Schedule.get()
-    e = sched.get_next_home_event(isodate)
+    e = sched.get_next_here_event(isodate)
     if not e:
         return ['No more home games!', "(...until next year...)"]
     elif e['date'] != isodate:
@@ -21,7 +21,7 @@ def sched_message(isodate=None):
                 Schedule.day_of_isodate(e['date']),
                 e['date'], e['them'], e['time'])]
     else:
-        quiet = sched.get_next_non_home_day(isodate)
+        quiet = sched.get_next_non_here_day(isodate)
         return ['Giants play %s at %s\n' % (e['them'], e['time']),
                 "No peace and quiet until %s, %s" % (
                 Schedule.day_of_isodate(quiet), quiet)]
@@ -36,7 +36,7 @@ class EightballPage(webapp2.RequestHandler):
         if not isodate:
             isodate = attnow().date().isoformat()
         sched = Schedule.get()
-        e = sched.get_next_home_event(isodate)
+        e = sched.get_next_here_event(isodate)
         logging.info("for isodate %s, isodatetime %s, next home event is %s" % (
                 isodate, attnow(), str(e)))
         is_home = e and e['date'] == isodate
