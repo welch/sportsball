@@ -112,10 +112,9 @@ class Schedule(db.Model):
 
         Returns: an event dictionary, or none if no more games scheduled for here
         """
-        schedule = self.get_events(isodate)
-        for i in xrange(len(schedule)):
-            if schedule[i]['is_here']:
-                return schedule[i]
+        for e in self.get_events(isodate):
+            if e['is_here']:
+                return e
         return None
 
     @staticmethod
@@ -126,14 +125,7 @@ class Schedule(db.Model):
         next = (datetime.strptime(iso, "%Y-%m-%d").date() + timedelta(days=days))
         return next.isoformat()
 
-    @staticmethod
-    def day_of_isodate(iso):
-        """
-        return day name for the date
-        """
-        return datetime.strptime(iso, "%Y-%m-%d").strftime("%A")
-
-    def get_next_non_here_day(self, isodate=None):
+    def get_next_non_here_datetime(self, isodate=None):
         """
         return the earliest day on or after the given date having no
         event here. If isodate is None, use today.
@@ -142,12 +134,11 @@ class Schedule(db.Model):
         """
         if isodate is None:
             isodate = attnow().date().isoformat()
-        schedule = self.get_events(isodate)
-        for i in xrange(len(schedule)):
-            if (not schedule[i]['is_here'] or isodate != schedule[i]['date']):
+        for e in self.get_events(isodate):
+            if (not e['is_here'] or isodate != e['date']):
                 break
             isodate = Schedule.next_isodate(isodate)
-        return isodate
+        return datetime.strptime(isodate, "%Y-%m-%d")
 
 def get_feed(url=SCHED_URL):
     """
@@ -170,7 +161,8 @@ def get_feed(url=SCHED_URL):
             them = event.name.split(" vs. ")[0 if is_home else 1]
             sched.append({
                 'date': event.begin.date().isoformat(),
-                'time': event.begin.time().isoformat(),
+                'day': event.begin.strftime("%A, %b %d"),
+                'time': event.begin.strftime("%I:%M %p"),
                 'is_home': is_home,
                 'is_here': is_here,
                 'location': event.location,

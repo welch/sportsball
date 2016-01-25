@@ -17,14 +17,12 @@ def sched_message(isodate=None):
         return ['No more home games!', "(...until next year...)"]
     elif e['date'] != isodate:
         return ['No home game today!',
-                'All quiet until %s, %s, when Giants play %s at %s' % (
-                Schedule.day_of_isodate(e['date']),
-                e['date'], e['them'], e['time'])]
+                'All quiet until %s, when Giants play %s at %s' % (
+                    e['day'], e['them'], e['time'])]
     else:
-        quiet = sched.get_next_non_here_day(isodate)
+        quiet = sched.get_next_non_here_datetime(isodate)
         return ['Giants play %s at %s\n' % (e['them'], e['time']),
-                "No peace and quiet until %s, %s" % (
-                Schedule.day_of_isodate(quiet), quiet)]
+                "No peace and quiet until %s" % quiet.strftime("%A, %b %d")]
 
 class IndexPage(webapp2.RequestHandler):
     def get(self, isodate):
