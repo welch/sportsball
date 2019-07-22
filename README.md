@@ -14,13 +14,11 @@ http://mlb.am/tix/giants_schedule_full
 ### Local installation and testing
 
 If you want to deploy your own version of _Sportsball_, you'll need to
-create a [Google App Engine account](https://developers.google.com/appengine/). If you'd just like to try it out on
-your local machine, [download the Python SDK](https://developers.google.com/appengine/downloads#Google_App_Engine_SDK_for_Python) and install it. If you
-are working in OS X, you'll be installing a Launcher OS X application,
-but this will also install symlinks for python commandline scripts for
-the development server and uploader in /usr/local/google_appengine/.
-
-You can test this locally by running (from this directory):
+create a
+[Google App Engine account](https://developers.google.com/appengine/).
+And get the [GCloud SDK](https://cloud.google.com/sdk/docs/) installed
+and yourself authenticated.  Once you are all set up, you can test
+this locally by running (from this directory):
 
 ```
 > dev_appserver.py .
@@ -36,21 +34,19 @@ experience are most welcome.
 
 To upload this application to your Google App Engine hosting
 environment, you'll first need to apply for a unique application
-id/name for your deployed app via your console at https://appengine.google.com/ .
-Change the first line of the `app.yaml` file in this directory to
+id/name for your deployed app via your console at
+`https://appengine.google.com/`.
+
+Run the following to deploy or update your app. Increment the `--version`
+argument when code changes.
 
 ```
-application: your-app-name
+gcloud app deploy app.yaml --project YOUR-PROJECT-ID --version YOUR-VERSION
 ```
 
-Then, from this directory run:
-
-```
-> appcfg.py --oauth2 update .
-```
-
-The first time you do this, you'll be routed through a web page that
-lets you autheticate to the appengine service, thereafter the credentials
-are cached (see https://developers.google.com/appengine/docs/python/tools/uploadinganapp#Python_Password-less_login_with_OAuth2 for more).
+Gcloud will describe the service it is about to deploy (yours!)
+(and of will probably suggest that you update components, because gcloud).
+Say yes and watch the deployment magic proceed.
+By default, 100% of traffic will be routed to this new version.
 
 If all was successfull, your app is now up and running in the cloud.
