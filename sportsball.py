@@ -1,4 +1,4 @@
-from schedule import Schedule, attnow
+from schedule import Schedule, oraclenow
 from google.appengine.ext.webapp import template
 import webapp2
 import logging
@@ -10,7 +10,7 @@ def sched_message(isodate=None):
     as a list of strings (one per line)
     """
     if not isodate:
-        isodate = attnow().date().isoformat()
+        isodate = oraclenow().date().isoformat()
     sched = Schedule.get()
     e = sched.get_next_here_event(isodate)
     if not e:
@@ -32,11 +32,11 @@ class IndexPage(webapp2.RequestHandler):
 class EightballPage(webapp2.RequestHandler):
     def get(self, verb="hosed", isodate=None):
         if not isodate:
-            isodate = attnow().date().isoformat()
+            isodate = oraclenow().date().isoformat()
         sched = Schedule.get()
         e = sched.get_next_here_event(isodate)
         logging.info("for isodate %s, isodatetime %s, next home event is %s" % (
-                isodate, attnow(), str(e)))
+                isodate, oraclenow(), str(e)))
         is_home = e and e['date'] == isodate
         message = sched_message(isodate)
         self.response.write(

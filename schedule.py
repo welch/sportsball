@@ -11,24 +11,24 @@ from ics import Calendar
 from urllib2 import urlopen
 
 # This iCal URL will be updated throughout the season as schedules change
-SCHED_URL = 'http://mlb.am/tix/giants_schedule_full'
+SCHED_URL = 'http://www.ticketing-client.com/ticketing-client/ical/EventTicketPromotionPrice.tiksrv?team_id=137&display_in=singlegame&ticket_category=Tickets&site_section=Default&sub_category=Default&leave_empty_games=true&event_type=T&begin_date=20190201'
 
-# for sanity, all date/time storage and manipulations will be in AT&T
-# Park's local TZ
-ATT_TZ = timezone('US/Pacific')
+# for sanity, all date/time storage and manipulations will be in
+# Oracle Park's local TZ
+ORACLE_TZ = timezone('US/Pacific')
 
 def localize(dt):
     """
-    set tzinfo for dt to ATT&T Park timezone, converting if it already
+    set tzinfo for dt to Oracle Park timezone, converting if it already
     has tzinfo set.
     """
     if dt.tzinfo == None:
-        return ATT_TZ.localize(dt)
+        return ORACLE_TZ.localize(dt)
     else:
-        return dt.astimezone(ATT_TZ)
+        return dt.astimezone(ORACLE_TZ)
 
-def attnow():
-    """now in the ATT_TZ"""
+def oraclenow():
+    """now in the ORACLE_TZ"""
 
     return localize(datetime.now(utc))
 
@@ -95,7 +95,7 @@ class Schedule(db.Model):
 
         """
         if not min_isodate:
-            min_isodate = attnow().date().isoformat()
+            min_isodate = oraclenow().date().isoformat()
         try:
             return self._events[min_isodate]
         except KeyError:
@@ -133,7 +133,7 @@ class Schedule(db.Model):
         Returns: an isodate string
         """
         if isodate is None:
-            isodate = attnow().date().isoformat()
+            isodate = oraclenow().date().isoformat()
         for e in self.get_events(isodate):
             if (not e['is_here'] or isodate != e['date']):
                 break
@@ -157,7 +157,7 @@ def get_feed(url=SCHED_URL):
                 continue # skip games already played
             event.begin = localize(event.begin)
             is_home = (event.name.endswith("Giants"))
-            is_here = event.location.startswith('AT&T')
+            is_here = event.location.startswith('Oracle')
             them = event.name.split(" vs. ")[0 if is_home else 1]
             sched.append({
                 'date': event.begin.date().isoformat(),
