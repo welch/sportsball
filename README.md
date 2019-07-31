@@ -45,8 +45,8 @@ gcloud app deploy app.yaml --project YOUR-PROJECT-ID --version YOUR-VERSION
 ```
 
 Gcloud will describe the service it is about to deploy (yours!)
-(and of will probably suggest that you update components, because gcloud).
-Say yes and watch the deployment magic proceed.
+(and will probably suggest that you update components, because gcloud).
+Say yes and watch the deployment goodness proceed.
 By default, 100% of traffic will be routed to this new version.
 
 If all was successfull, your app is now up and running in the cloud.
