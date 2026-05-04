@@ -1,0 +1,28 @@
+# Built/cached artifacts
+.venv/
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Source-control + tooling
+.git/
+.gitignore
+.github/
+.pre-commit-config.yaml
+
+# Tests + dev-only files
+tests/
+.editorconfig
+.python-version
+
+# Docs
+README.md
+CHANGELOG.md
+LICENSE
