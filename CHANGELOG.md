@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `/tasks/refresh` endpoint that invalidates the in-memory event cache
+  and refills it. Gated by the `X-Appengine-Cron` header (GAE strips this
+  from external requests), so external callers can't trigger refetch
+  storms. `cron.yaml` schedules it daily at 06:00 PT.
 - Static-asset cache-busting. All `<link>`/`<img>` URLs now carry a
   `?v=<hash>` query, where `<hash>` is a content hash of every file in
   the static directory. Computed once at startup. When any CSS or image

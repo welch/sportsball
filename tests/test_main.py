@@ -159,6 +159,33 @@ def test_index_has_viewport_meta(monkeypatch: pytest.MonkeyPatch, fixed_now: dat
     assert b"width=device-width" in response.data
 
 
+def test_refresh_requires_cron_header(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(main, "_events", lambda: [])
+    response = main.app.test_client().get("/tasks/refresh")
+    assert response.status_code == 403
+
+
+def test_refresh_with_cron_header_invalidates_cache(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = {"count": 0}
+
+    def fake_events() -> list:
+        calls["count"] += 1
+        return []
+
+    # Pre-warm cache with stale data so we can verify it's bypassed.
+    main._cache["events"] = ["should be replaced"]
+    main._cache["fetched_at"] = 9_999_999_999.0
+    monkeypatch.setattr(main, "_events", fake_events)
+
+    response = main.app.test_client().get("/tasks/refresh", headers={"X-Appengine-Cron": "true"})
+    assert response.status_code == 200
+    assert b"refreshed" in response.data
+    assert calls["count"] == 1
+    # Reset cache state for downstream tests.
+    main._cache["events"] = None
+    main._cache["fetched_at"] = 0.0
+
+
 def test_static_urls_carry_cache_bust_version(
     monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
 ) -> None:

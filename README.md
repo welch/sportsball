@@ -56,8 +56,12 @@ Variables:
 
 ```sh
 gcloud app deploy app.yaml --project sports-ball
-# (cron.yaml — skip until /tasks/refresh is implemented)
+gcloud app deploy cron.yaml --project sports-ball
 ```
+
+`cron.yaml` runs `/tasks/refresh` daily at 06:00 PT to keep the in-process
+event cache warm. The endpoint is gated by the `X-Appengine-Cron` header
+(GAE strips this from external requests), so only cron can trigger it.
 
 `env.yaml` is bundled automatically — `.gitignore` keeps it out of git, but
 `.gcloudignore` does NOT exclude it, so it ships with the deploy.

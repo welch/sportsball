@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from flask import Flask, render_template, url_for
+from flask import Flask, abort, render_template, request, url_for
 from markupsafe import Markup, escape
 from werkzeug.routing import BaseConverter, ValidationError
 
@@ -201,3 +201,20 @@ def index(verb: str | None = None, isodate: date | None = None) -> str:
 @app.get("/healthz")
 def healthz() -> tuple[str, int]:
     return "ok", 200
+
+
+@app.get("/tasks/refresh")
+def refresh() -> tuple[str, int]:
+    """Invalidate the in-memory event cache and refill it.
+
+    Gated by the X-Appengine-Cron header — GAE injects this only on cron
+    invocations and strips it from external requests, so external callers
+    can't trigger a refetch storm.
+    """
+    if request.headers.get("X-Appengine-Cron") != "true":
+        abort(403)
+    with _cache_lock:
+        _cache["events"] = None
+        _cache["fetched_at"] = 0.0
+    events = _events()
+    return f"refreshed: {len(events)} events\n", 200
