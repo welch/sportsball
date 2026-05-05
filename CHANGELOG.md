@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Pydantic `Event` model and Giants adapter against the MLB Stats API
+  (`statsapi.mlb.com`). Returns one `Event` per game with venue name preserved
+  so home/away can be filtered downstream by `venue == "Oracle Park"`.
+
+### Removed
+
+- `icalendar` dependency. None of the four planned feeds use iCal.
+
 ## [0.1.0] - 2026-05-04
 
 ### Added
