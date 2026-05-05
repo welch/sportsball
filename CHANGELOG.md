@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Ticketmaster Discovery adapter, single module covering both venues
+  (`fetch_oracle_park_events()` / `fetch_chase_center_events()`). Filters
+  out `subGenre` `MLB` and `NBA` so it doesn't duplicate the team adapters;
+  WNBA Valkyries home games and Motorsports/Racing events pass through.
+  Reads `TICKETMASTER_API_KEY` from `os.environ`.
+- Per-adapter resilience in `aggregator.fetch_all()` — one failing source
+  no longer blanks the page; the failure is logged and the remaining
+  adapters' events render. Ticketmaster's API has been observed returning
+  502s on retry, so this isn't theoretical.
+- `Event.category` (Literal `"sports"` | `"concert"`) and per-category
+  page theming. Sports events keep their team color (Giants orange at
+  Oracle Park, Warriors blue at Chase Center). Concert/non-sports events
+  get a third color (purple `#7E2F8E`) for both verb and halo. WNBA
+  Valkyries are tagged `sports` (they're a team game) and share the
+  Warriors blue. Halos compose: a day with a Giants game and a concert
+  shows orange + purple concentric rings.
+
 ## [0.2.0] - 2026-05-05
 
 ### Added

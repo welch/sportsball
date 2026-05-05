@@ -1,6 +1,9 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel
+
+EventCategory = Literal["sports", "concert"]
 
 
 class Event(BaseModel):
@@ -9,3 +12,4 @@ class Event(BaseModel):
     name: str
     starts_at: datetime
     venue: str
+    category: EventCategory = "sports"

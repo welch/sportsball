@@ -23,13 +23,14 @@ def fixed_now(monkeypatch: pytest.MonkeyPatch) -> datetime:
     return now
 
 
-def _ev(name: str, venue: str, when_utc: str) -> Event:
+def _ev(name: str, venue: str, when_utc: str, category: str = "sports") -> Event:
     return Event(
         source="test",
         source_id=name,
         name=name,
         starts_at=datetime.fromisoformat(when_utc),
         venue=venue,
+        category=category,  # type: ignore[arg-type]
     )
 
 
@@ -209,6 +210,83 @@ def test_index_invalid_date_404(monkeypatch: pytest.MonkeyPatch) -> None:
     # Regex matches the shape but the date itself is invalid → 404.
     response = main.app.test_client().get("/2026-13-32")
     assert response.status_code == 404
+
+
+def test_index_concert_today_uses_concert_halo_and_verb(
+    monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
+) -> None:
+    concert = _ev(
+        "Demi Lovato: It's Not That Deep Tour",
+        "Chase Center",
+        "2026-05-05T03:00:00+00:00",
+        category="concert",
+    )
+    monkeypatch.setattr(main, "_events", lambda: [concert])
+    response = main.app.test_client().get("/")
+    assert b"halo-concert" in response.data
+    assert b'class="verb concert"' in response.data
+    # No team sports today → no team halos.
+    assert b"halo-warriors" not in response.data
+    assert b"halo-giants" not in response.data
+
+
+def test_index_concert_at_oracle_park_uses_concert_halo(
+    monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
+) -> None:
+    concert = _ev(
+        "Fuerza Regida",
+        "Oracle Park",
+        "2026-05-05T03:00:00+00:00",
+        category="concert",
+    )
+    monkeypatch.setattr(main, "_events", lambda: [concert])
+    response = main.app.test_client().get("/")
+    assert b"halo-concert" in response.data
+    assert b'class="verb concert"' in response.data
+    assert b"halo-giants" not in response.data
+
+
+def test_index_valkyries_treated_as_sports(
+    monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
+) -> None:
+    valks = _ev(
+        "Phoenix Mercury at Golden State Valkyries",
+        "Chase Center",
+        "2026-05-05T03:00:00+00:00",
+        category="sports",
+    )
+    monkeypatch.setattr(main, "_events", lambda: [valks])
+    response = main.app.test_client().get("/")
+    assert b"halo-warriors" in response.data
+    assert b'class="verb warriors"' in response.data
+    assert b'class="warriors">Golden State Valkyries</span>' in response.data
+    assert b"halo-concert" not in response.data
+
+
+def test_index_mixed_sports_and_concert_neutral_verb(
+    monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
+) -> None:
+    game = _ev(
+        "New York Mets at San Francisco Giants",
+        "Oracle Park",
+        "2026-05-05T02:05:00+00:00",
+        category="sports",
+    )
+    show = _ev(
+        "Some Concert",
+        "Chase Center",
+        "2026-05-05T03:00:00+00:00",
+        category="concert",
+    )
+    monkeypatch.setattr(main, "_events", lambda: [game, show])
+    response = main.app.test_client().get("/")
+    # All three halos render (giants sports + concert).
+    assert b"halo-giants" in response.data
+    assert b"halo-concert" in response.data
+    # Mixed kinds → no single verb color class.
+    assert b'class="verb giants"' not in response.data
+    assert b'class="verb warriors"' not in response.data
+    assert b'class="verb concert"' not in response.data
 
 
 def test_index_warriors_colorized_and_blue_verb(

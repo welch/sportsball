@@ -1,3 +1,4 @@
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
@@ -9,6 +10,8 @@ PT = ZoneInfo("America/Los_Angeles")
 TRACKED_VENUES = frozenset({"Oracle Park", "Chase Center"})
 
 EventFetcher = Callable[[], list[Event]]
+
+log = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -23,7 +26,11 @@ class Status:
 def fetch_all(adapters: list[EventFetcher]) -> list[Event]:
     events: list[Event] = []
     for fetch in adapters:
-        events.extend(fetch())
+        try:
+            events.extend(fetch())
+        except Exception:
+            # One bad source shouldn't blank the page. Log and continue.
+            log.exception("adapter %s failed", getattr(fetch, "__name__", repr(fetch)))
     return [e for e in events if e.venue in TRACKED_VENUES]
 
 

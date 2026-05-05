@@ -1,6 +1,7 @@
 :root {
     --giants-orange: #FD5A1E;
     --warriors-blue: #1D428A;
+    --concert-purple: #7E2F8E;
 }
 
 body {
@@ -39,6 +40,10 @@ h1,
 
 .verb.warriors {
     color: var(--warriors-blue);
+}
+
+.verb.concert {
+    color: var(--concert-purple);
 }
 
 .events {
@@ -87,7 +92,15 @@ p {
     );
 }
 
-/* Both teams active: orange inner halo + blue outer ring. */
+.ball-frame.halo-concert {
+    background: radial-gradient(
+        circle,
+        rgba(126, 47, 142, 0.55) 30%,
+        rgba(126, 47, 142, 0) 65%
+    );
+}
+
+/* Two-halo days draw concentric rings: inner / outer. */
 .ball-frame.halo-giants.halo-warriors {
     background:
         radial-gradient(
@@ -100,6 +113,58 @@ p {
             rgba(29, 66, 138, 0) 50%,
             rgba(29, 66, 138, 0.55) 60%,
             rgba(29, 66, 138, 0) 78%
+        );
+}
+
+.ball-frame.halo-giants.halo-concert {
+    background:
+        radial-gradient(
+            circle,
+            rgba(253, 90, 30, 0.65) 25%,
+            rgba(253, 90, 30, 0) 45%
+        ),
+        radial-gradient(
+            circle,
+            rgba(126, 47, 142, 0) 50%,
+            rgba(126, 47, 142, 0.55) 60%,
+            rgba(126, 47, 142, 0) 78%
+        );
+}
+
+.ball-frame.halo-warriors.halo-concert {
+    background:
+        radial-gradient(
+            circle,
+            rgba(29, 66, 138, 0.65) 25%,
+            rgba(29, 66, 138, 0) 45%
+        ),
+        radial-gradient(
+            circle,
+            rgba(126, 47, 142, 0) 50%,
+            rgba(126, 47, 142, 0.55) 60%,
+            rgba(126, 47, 142, 0) 78%
+        );
+}
+
+/* All three: orange innermost, blue middle, purple outermost. */
+.ball-frame.halo-giants.halo-warriors.halo-concert {
+    background:
+        radial-gradient(
+            circle,
+            rgba(253, 90, 30, 0.65) 18%,
+            rgba(253, 90, 30, 0) 33%
+        ),
+        radial-gradient(
+            circle,
+            rgba(29, 66, 138, 0) 38%,
+            rgba(29, 66, 138, 0.55) 48%,
+            rgba(29, 66, 138, 0) 60%
+        ),
+        radial-gradient(
+            circle,
+            rgba(126, 47, 142, 0) 65%,
+            rgba(126, 47, 142, 0.55) 75%,
+            rgba(126, 47, 142, 0) 88%
         );
 }
 

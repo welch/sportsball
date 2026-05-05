@@ -20,7 +20,7 @@
     <main>
       <h1>Is my day <span class="verb{% if verb_class %} {{ verb_class }}{% endif %}">{{ verb }}?</span></h1>
 
-      <div class="ball-frame{% if giants_active %} halo-giants{% endif %}{% if warriors_active %} halo-warriors{% endif %}">
+      <div class="ball-frame{% if giants_active %} halo-giants{% endif %}{% if warriors_active %} halo-warriors{% endif %}{% if concert_active %} halo-concert{% endif %}">
         <img src="{{ url_for('static', filename='img/8ball-' + ('yes' if fucked else 'no') + '-1.gif') }}"
              width="216" height="215"
              alt="{{ 'Yes' if fucked else 'No' }}">

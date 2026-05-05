@@ -1,6 +1,8 @@
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
+import pytest
+
 from sportsball.aggregator import PT, compute_status, fetch_all
 from sportsball.models import Event
 
@@ -30,6 +32,22 @@ def test_fetch_all_filters_to_tracked_venues() -> None:
     events = fetch_all([adapter_a, adapter_b])
     assert {e.venue for e in events} == {"Oracle Park", "Chase Center"}
     assert len(events) == 2
+
+
+def test_fetch_all_survives_one_failing_adapter(caplog: pytest.LogCaptureFixture) -> None:
+    def good() -> list[Event]:
+        return [_ev("good", "Oracle Park", "2026-05-04T19:00:00+00:00", "g", "1")]
+
+    def bad() -> list[Event]:
+        raise RuntimeError("upstream API blew up")
+
+    with caplog.at_level("ERROR", logger="sportsball.aggregator"):
+        events = fetch_all([good, bad])
+    assert len(events) == 1
+    assert events[0].source_id == "1"
+    assert any(
+        "upstream API blew up" in r.message or "bad failed" in r.message for r in caplog.records
+    )
 
 
 def test_compute_status_no_events_today_no_future() -> None:
