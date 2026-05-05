@@ -13,6 +13,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and refills it. Gated by the `X-Appengine-Cron` header (GAE strips this
   from external requests), so external callers can't trigger refetch
   storms. `cron.yaml` schedules it daily at 06:00 PT.
+- Page-date row under the 8-ball: full date in the title font, colored
+  using the same day-color (Giants orange / Warriors blue / concert
+  purple) as the verb and halo. Aids in eyeballing arbitrary `/<isodate>`
+  pages.
+- Footer: small grey "last updated &lt;ts&gt;" timestamp showing when the
+  in-process event cache was last refreshed. Doubles as visible
+  verification that `/tasks/refresh` actually ran.
+
+### Fixed
+
+- Halo radial-gradient stops were being measured against the wrapper's
+  diagonal (`farthest-corner`, the CSS default), which placed inner-ring
+  colors fully behind the 8-ball image. Switched to `closest-side` so
+  percentages correspond to the visible halo zone (60–100%); two- and
+  three-halo days now show all rings as intended.
 - Static-asset cache-busting. All `<link>`/`<img>` URLs now carry a
   `?v=<hash>` query, where `<hash>` is a content hash of every file in
   the static directory. Computed once at startup. When any CSS or image

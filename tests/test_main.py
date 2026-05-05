@@ -159,6 +159,48 @@ def test_index_has_viewport_meta(monkeypatch: pytest.MonkeyPatch, fixed_now: dat
     assert b"width=device-width" in response.data
 
 
+def test_index_shows_page_date_with_day_color(
+    monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
+) -> None:
+    today_event = _ev("Mets at Giants", "Oracle Park", "2026-05-05T02:05:00+00:00")
+    monkeypatch.setattr(main, "_events", lambda: [today_event])
+    response = main.app.test_client().get("/")
+    assert b'class="page-date giants"' in response.data
+    assert b"Monday, May 4, 2026" in response.data
+
+
+def test_index_page_date_neutral_when_no_color(
+    monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
+) -> None:
+    monkeypatch.setattr(main, "_events", lambda: [])
+    response = main.app.test_client().get("/")
+    assert b'class="page-date"' in response.data
+    # No color class appended when no events / mixed.
+    assert b'class="page-date giants"' not in response.data
+    assert b'class="page-date warriors"' not in response.data
+    assert b'class="page-date concert"' not in response.data
+
+
+def test_index_page_date_reflects_url_isodate(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(main, "_events", lambda: [])
+    response = main.app.test_client().get("/2026-12-25")
+    assert b"Friday, December 25, 2026" in response.data
+
+
+def test_index_shows_last_updated_footer(
+    monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
+) -> None:
+    import time as _time
+
+    main._cache["events"] = []
+    main._cache["fetched_at"] = _time.time()
+    monkeypatch.setattr(main, "_events", lambda: [])
+    response = main.app.test_client().get("/")
+    assert b"last updated " in response.data
+    main._cache["events"] = None
+    main._cache["fetched_at"] = 0.0
+
+
 def test_refresh_requires_cron_header(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(main, "_events", lambda: [])
     response = main.app.test_client().get("/tasks/refresh")

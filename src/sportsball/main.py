@@ -195,7 +195,15 @@ def index(verb: str | None = None, isodate: date | None = None) -> str:
         verb_class=_verb_color_class(status.today_events),
         quiet_label=quiet_label,
         next_event_label=next_event_label,
+        last_updated=_last_updated_label(),
     )
+
+
+def _last_updated_label() -> str | None:
+    ts = _cache["fetched_at"]
+    if not ts:
+        return None
+    return datetime.fromtimestamp(ts, tz=PT).strftime("%a %b %-d, %-I:%M %p %Z")
 
 
 @app.get("/healthz")

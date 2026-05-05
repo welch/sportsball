@@ -26,6 +26,10 @@
              alt="{{ 'Yes' if fucked else 'No' }}">
       </div>
 
+      <div class="page-date{% if verb_class %} {{ verb_class }}{% endif %}">
+        <time datetime="{{ status.today.isoformat() }}">{{ status.today.strftime('%A, %B %-d, %Y') }}</time>
+      </div>
+
       {% if fucked %}
         <ul class="events">
           {% for e in status.today_events %}
@@ -52,5 +56,8 @@
         <p class="verdict">All clear. No future events scheduled.</p>
       {% endif %}
     </main>
+    {% if last_updated %}
+      <footer>last updated {{ last_updated }}</footer>
+    {% endif %}
   </body>
 </html>

@@ -25,7 +25,12 @@ h1,
     font-size: 50px;
 }
 
-/* Team-name and verb accents — applied inline. */
+.page-date {
+    font-size: 36px;
+    margin: 0.5em 0;
+}
+
+/* Day-color classes — applied generically (verb, page-date, inline team names). */
 .giants {
     color: var(--giants-orange);
 }
@@ -34,15 +39,7 @@ h1,
     color: var(--warriors-blue);
 }
 
-.verb.giants {
-    color: var(--giants-orange);
-}
-
-.verb.warriors {
-    color: var(--warriors-blue);
-}
-
-.verb.concert {
+.concert {
     color: var(--concert-purple);
 }
 
@@ -61,8 +58,10 @@ p {
 }
 
 /* 8-ball halo: a circular padding zone behind the image filled with a soft
- * radial-gradient glow. The image's white background covers the gradient at
- * its center; the glow shows through in the padding.
+ * radial-gradient glow. Stops use `closest-side` so percentages are measured
+ * against the wrapper's half-width (not its diagonal), which makes ring
+ * placement intuitive: the image covers ~64% of that radius, so visible halo
+ * lives in the 60–100% range.
  */
 .ball-frame {
     display: inline-block;
@@ -78,71 +77,77 @@ p {
 
 .ball-frame.halo-giants {
     background: radial-gradient(
-        circle,
-        rgba(253, 90, 30, 0.55) 30%,
-        rgba(253, 90, 30, 0) 65%
+        circle closest-side,
+        rgba(253, 90, 30, 0) 60%,
+        rgba(253, 90, 30, 0.7) 80%,
+        rgba(253, 90, 30, 0) 100%
     );
 }
 
 .ball-frame.halo-warriors {
     background: radial-gradient(
-        circle,
-        rgba(29, 66, 138, 0.55) 30%,
-        rgba(29, 66, 138, 0) 65%
+        circle closest-side,
+        rgba(29, 66, 138, 0) 60%,
+        rgba(29, 66, 138, 0.7) 80%,
+        rgba(29, 66, 138, 0) 100%
     );
 }
 
 .ball-frame.halo-concert {
     background: radial-gradient(
-        circle,
-        rgba(126, 47, 142, 0.55) 30%,
-        rgba(126, 47, 142, 0) 65%
+        circle closest-side,
+        rgba(126, 47, 142, 0) 60%,
+        rgba(126, 47, 142, 0.7) 80%,
+        rgba(126, 47, 142, 0) 100%
     );
 }
 
-/* Two-halo days draw concentric rings: inner / outer. */
+/* Two-halo days: inner ring just outside the image, outer ring at the rim. */
 .ball-frame.halo-giants.halo-warriors {
     background:
         radial-gradient(
-            circle,
-            rgba(253, 90, 30, 0.65) 25%,
-            rgba(253, 90, 30, 0) 45%
+            circle closest-side,
+            rgba(253, 90, 30, 0) 60%,
+            rgba(253, 90, 30, 0.7) 73%,
+            rgba(253, 90, 30, 0) 84%
         ),
         radial-gradient(
-            circle,
-            rgba(29, 66, 138, 0) 50%,
-            rgba(29, 66, 138, 0.55) 60%,
-            rgba(29, 66, 138, 0) 78%
+            circle closest-side,
+            rgba(29, 66, 138, 0) 82%,
+            rgba(29, 66, 138, 0.7) 92%,
+            rgba(29, 66, 138, 0) 100%
         );
 }
 
 .ball-frame.halo-giants.halo-concert {
     background:
         radial-gradient(
-            circle,
-            rgba(253, 90, 30, 0.65) 25%,
-            rgba(253, 90, 30, 0) 45%
+            circle closest-side,
+            rgba(253, 90, 30, 0) 60%,
+            rgba(253, 90, 30, 0.7) 73%,
+            rgba(253, 90, 30, 0) 84%
         ),
         radial-gradient(
-            circle,
-            rgba(126, 47, 142, 0) 50%,
-            rgba(126, 47, 142, 0.55) 60%,
-            rgba(126, 47, 142, 0) 78%
+            circle closest-side,
+            rgba(126, 47, 142, 0) 82%,
+            rgba(126, 47, 142, 0.7) 92%,
+            rgba(126, 47, 142, 0) 100%
         );
 }
 
 .ball-frame.halo-warriors.halo-concert {
     background:
         radial-gradient(
-            circle,
-            rgba(29, 66, 138, 0.65) 25%,
-            rgba(29, 66, 138, 0) 45%
+            circle closest-side,
+            rgba(29, 66, 138, 0) 60%,
+            rgba(29, 66, 138, 0.7) 73%,
+            rgba(29, 66, 138, 0) 84%
         ),
         radial-gradient(
-            circle,
-            rgba(126, 47, 142, 0) 50%,
-            rgba(126, 47, 142, 0.55) 60%,
-            rgba(126, 47, 142, 0) 78%
+            circle closest-side,
+            rgba(126, 47, 142, 0) 82%,
+            rgba(126, 47, 142, 0.7) 92%,
+            rgba(126, 47, 142, 0) 100%
         );
 }
 
@@ -150,22 +155,31 @@ p {
 .ball-frame.halo-giants.halo-warriors.halo-concert {
     background:
         radial-gradient(
-            circle,
-            rgba(253, 90, 30, 0.65) 18%,
-            rgba(253, 90, 30, 0) 33%
+            circle closest-side,
+            rgba(253, 90, 30, 0) 60%,
+            rgba(253, 90, 30, 0.7) 68%,
+            rgba(253, 90, 30, 0) 76%
         ),
         radial-gradient(
-            circle,
-            rgba(29, 66, 138, 0) 38%,
-            rgba(29, 66, 138, 0.55) 48%,
-            rgba(29, 66, 138, 0) 60%
+            circle closest-side,
+            rgba(29, 66, 138, 0) 75%,
+            rgba(29, 66, 138, 0.7) 84%,
+            rgba(29, 66, 138, 0) 92%
         ),
         radial-gradient(
-            circle,
-            rgba(126, 47, 142, 0) 65%,
-            rgba(126, 47, 142, 0.55) 75%,
-            rgba(126, 47, 142, 0) 88%
+            circle closest-side,
+            rgba(126, 47, 142, 0) 91%,
+            rgba(126, 47, 142, 0.7) 96%,
+            rgba(126, 47, 142, 0) 100%
         );
+}
+
+footer {
+    margin-top: 3em;
+    font-size: 12px;
+    color: #888;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    text-align: center;
 }
 
 @media (max-width: 480px) {
@@ -179,6 +193,9 @@ p {
     }
     .verb {
         font-size: 40px;
+    }
+    .page-date {
+        font-size: 28px;
     }
     .ball-frame {
         padding: 40px;
