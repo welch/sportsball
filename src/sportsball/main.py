@@ -120,7 +120,9 @@ def _verb_color_class(today_events: list[Event]) -> str:
 @app.get("/<verb:verb>/")
 @app.get("/<isodate:isodate>")
 @app.get("/<verb:verb>/<isodate:isodate>")
-def index(verb: str = "hosed", isodate: date | None = None) -> str:
+def index(verb: str | None = None, isodate: date | None = None) -> str:
+    if verb is None:
+        verb = os.environ.get("VERB", "hosed")
     if isodate is not None:
         now = datetime.combine(isodate, dtime(12, 0), tzinfo=PT)
     else:

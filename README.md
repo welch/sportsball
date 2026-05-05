@@ -40,11 +40,17 @@ Format:
 ```yaml
 env_variables:
   TICKETMASTER_API_KEY: <your-key>
+  VERB: <default-verb-shown-in-page-title>
   # add more as needed
 ```
 
-Required variables: `TICKETMASTER_API_KEY` (free Discovery API key from
-<https://developer.ticketmaster.com/>).
+Variables:
+
+- `TICKETMASTER_API_KEY` — required. Free Discovery API key from
+  <https://developer.ticketmaster.com/>.
+- `VERB` — optional. Default verb in the title ("Is my day _verb_?").
+  Defaults to `hosed` if unset. URL-segment verbs (`/<verb>/`) still
+  override per-request.
 
 ## Deploy
 

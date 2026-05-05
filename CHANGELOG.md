@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `VERB` env var sets the default verb in the page title, read at request
+  time. Falls back to `hosed` when unset. URL-segment verbs still override
+  per-request. Lets the rude default stay out of git via `env.yaml`.
 - 8-ball page wired up over the multi-adapter aggregator, in three states:
   - **Today fucked**: lists every event happening today; ends with
     "No peace and quiet until [tomorrow / Monday / Monday, May 12]."

@@ -127,13 +127,28 @@ def test_index_future_event_tomorrow(monkeypatch: pytest.MonkeyPatch, fixed_now:
     assert b">tomorrow<" in response.data
 
 
-def test_index_verb_default_and_override(
+def test_index_verb_default_from_env(monkeypatch: pytest.MonkeyPatch, fixed_now: datetime) -> None:
+    monkeypatch.setattr(main, "_events", lambda: [])
+    monkeypatch.setenv("VERB", "punished")
+    response = main.app.test_client().get("/")
+    assert b"Is my day punished?" in response.data
+
+
+def test_index_verb_default_when_env_unset(
     monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
 ) -> None:
     monkeypatch.setattr(main, "_events", lambda: [])
-    client = main.app.test_client()
-    assert b"Is my day hosed?" in client.get("/").data
-    assert b"Is my day fucked?" in client.get("/fucked/").data
+    monkeypatch.delenv("VERB", raising=False)
+    response = main.app.test_client().get("/")
+    assert b"Is my day hosed?" in response.data
+
+
+def test_index_url_verb_overrides_env(monkeypatch: pytest.MonkeyPatch, fixed_now: datetime) -> None:
+    monkeypatch.setattr(main, "_events", lambda: [])
+    monkeypatch.setenv("VERB", "punished")
+    response = main.app.test_client().get("/fucked/")
+    assert b"Is my day fucked?" in response.data
+    assert b"punished" not in response.data
 
 
 def test_index_has_viewport_meta(monkeypatch: pytest.MonkeyPatch, fixed_now: datetime) -> None:
