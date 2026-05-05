@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description"
+          content="Is my day fucked? Are there events at Oracle Park or Chase Center today?">
+    <meta property="og:title"
+          content="Is my day fucked? Events at Oracle Park or Chase Center today?">
+    <title>Is my day {{ verb }}?</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="stylesheet" type="text/css"
+          href="https://fonts.googleapis.com/css?family=Permanent+Marker&display=swap">
+    <link rel="stylesheet" type="text/css"
+          href="{{ url_for('static', filename='css/8ball.css') }}">
+    <link rel="icon" type="image/png"
+          href="{{ url_for('static', filename='img/icon-48.png') }}">
+  </head>
+  <body>
+    <main>
+      <h1>Is my day <span class="verb{% if verb_class %} {{ verb_class }}{% endif %}">{{ verb }}?</span></h1>
+
+      <div class="ball-frame{% if giants_active %} halo-giants{% endif %}{% if warriors_active %} halo-warriors{% endif %}">
+        <img src="{{ url_for('static', filename='img/8ball-' + ('yes' if fucked else 'no') + '-1.gif') }}"
+             width="216" height="215"
+             alt="{{ 'Yes' if fucked else 'No' }}">
+      </div>
+
+      {% if fucked %}
+        <ul class="events">
+          {% for e in status.today_events %}
+            {% set local = e.starts_at | pt %}
+            <li>{{ e.name | team_colorize }} at {{ e.venue }},
+              <time datetime="{{ local.isoformat() }}">{{ local.strftime('%-I:%M %p') }}</time>
+            </li>
+          {% endfor %}
+        </ul>
+        {% if quiet_label %}
+          <p>No peace and quiet until <time datetime="{{ status.next_quiet_date.isoformat() }}">{{ quiet_label }}</time>.</p>
+        {% endif %}
+      {% elif status.next_event_date %}
+        <p class="verdict">All clear until <time datetime="{{ status.next_event_date.isoformat() }}">{{ next_event_label }}</time>:</p>
+        <ul class="events">
+          {% for e in status.next_event_events %}
+            {% set local = e.starts_at | pt %}
+            <li>({{ e.name | team_colorize }} at {{ e.venue }},
+              <time datetime="{{ local.isoformat() }}">{{ local.strftime('%-I:%M %p') }}</time>)
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="verdict">All clear. No future events scheduled.</p>
+      {% endif %}
+    </main>
+  </body>
+</html>

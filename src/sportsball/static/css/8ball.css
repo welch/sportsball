@@ -1,0 +1,121 @@
+:root {
+    --giants-orange: #FD5A1E;
+    --warriors-blue: #1D428A;
+}
+
+body {
+    font-family: 'Permanent Marker', arial, sans-serif;
+    font-size: 20px;
+    text-align: center;
+    width: 80%;
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 1rem;
+    color: #000;
+}
+
+h1,
+.verdict {
+    font-size: 40px;
+    margin: 0.5em 0;
+}
+
+.verb {
+    font-size: 50px;
+}
+
+/* Team-name and verb accents — applied inline. */
+.giants {
+    color: var(--giants-orange);
+}
+
+.warriors {
+    color: var(--warriors-blue);
+}
+
+.verb.giants {
+    color: var(--giants-orange);
+}
+
+.verb.warriors {
+    color: var(--warriors-blue);
+}
+
+.events {
+    list-style: none;
+    padding: 0;
+    margin: 1em 0;
+}
+
+.events li {
+    margin: 0.4em 0;
+}
+
+p {
+    margin: 0.5em 0;
+}
+
+/* 8-ball halo: a circular padding zone behind the image filled with a soft
+ * radial-gradient glow. The image's white background covers the gradient at
+ * its center; the glow shows through in the padding.
+ */
+.ball-frame {
+    display: inline-block;
+    padding: 60px;
+    border-radius: 50%;
+    line-height: 0;
+}
+
+.ball-frame img {
+    max-width: 100%;
+    height: auto;
+}
+
+.ball-frame.halo-giants {
+    background: radial-gradient(
+        circle,
+        rgba(253, 90, 30, 0.55) 30%,
+        rgba(253, 90, 30, 0) 65%
+    );
+}
+
+.ball-frame.halo-warriors {
+    background: radial-gradient(
+        circle,
+        rgba(29, 66, 138, 0.55) 30%,
+        rgba(29, 66, 138, 0) 65%
+    );
+}
+
+/* Both teams active: orange inner halo + blue outer ring. */
+.ball-frame.halo-giants.halo-warriors {
+    background:
+        radial-gradient(
+            circle,
+            rgba(253, 90, 30, 0.65) 25%,
+            rgba(253, 90, 30, 0) 45%
+        ),
+        radial-gradient(
+            circle,
+            rgba(29, 66, 138, 0) 50%,
+            rgba(29, 66, 138, 0.55) 60%,
+            rgba(29, 66, 138, 0) 78%
+        );
+}
+
+@media (max-width: 480px) {
+    body {
+        width: 95%;
+        font-size: 18px;
+    }
+    h1,
+    .verdict {
+        font-size: 32px;
+    }
+    .verb {
+        font-size: 40px;
+    }
+    .ball-frame {
+        padding: 40px;
+    }
+}

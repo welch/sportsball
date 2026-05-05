@@ -7,12 +7,12 @@ includes:
 
 handlers:
   - url: /static
-    static_dir: static
+    static_dir: src/sportsball/static
     secure: always
 
   - url: /favicon\.ico
-    static_files: static/img/icon-48.png
-    upload: static/img/icon-48\.png
+    static_files: src/sportsball/static/img/icon-48.png
+    upload: src/sportsball/static/img/icon-48\.png
     secure: always
 
   - url: /.*
