@@ -20,6 +20,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   named adapter tuples and records success/failure per source. The health
   endpoint itself is excluded from the request counter so reloading it
   doesn't pollute the numbers.
+- 301-redirect non-canonical hosts to the host configured via the
+  `CANONICAL_HOST` env var. `before_request` hook reads the canonical
+  bare hostname from `os.environ` and redirects to
+  `https://$CANONICAL_HOST<path>?<query>` whenever `request.host`
+  differs. No-ops when the env var is unset (local dev). `/healthz` and
+  requests with `X-Appengine-Cron: true` are exempt so GAE health checks
+  and cron continue to work on the appspot host. Busts stale 301s
+  cached by browsers from the previous reverse-direction redirect.
 - Pulsing-glow effect on the 8-ball's answer window. A duplicate of the
   ball image is layered over the base, clipped to a circle around the
   answer window (`circle(23% at 50% 47%)`), and animated with a 3-second
