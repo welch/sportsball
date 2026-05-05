@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pydantic `Event` model and Giants adapter against the MLB Stats API
   (`statsapi.mlb.com`). Returns one `Event` per game with venue name preserved
   so home/away can be filtered downstream by `venue == "Oracle Park"`.
+- Warriors adapter against the NBA league-wide CDN feed
+  (`cdn.nba.com/static/json/staticData/scheduleLeagueV2.json`). Filters to
+  GSW; same `Event` shape as Giants. Home/away by `venue == "Chase Center"`.
 - Secrets pattern: single gitignored `env.yaml` at the repo root, deployed
   to GAE via `app.yaml` `includes:` and loaded into `os.environ` at app
   startup locally. One source of truth, no `.env`/YAML duplication.
