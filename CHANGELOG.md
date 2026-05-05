@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Static-asset cache-busting. All `<link>`/`<img>` URLs now carry a
+  `?v=<hash>` query, where `<hash>` is a content hash of every file in
+  the static directory. Computed once at startup. When any CSS or image
+  changes, the hash rotates and browsers refetch automatically — no more
+  manual cache-clearing after deploys.
 - Ticketmaster Discovery adapter, single module covering both venues
   (`fetch_oracle_park_events()` / `fetch_chase_center_events()`). Filters
   out `subGenre` `MLB` and `NBA` so it doesn't duplicate the team adapters;

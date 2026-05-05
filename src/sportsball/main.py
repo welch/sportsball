@@ -1,3 +1,4 @@
+import hashlib
 import os
 import threading
 import time
@@ -7,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from flask import Flask, render_template
+from flask import Flask, render_template, url_for
 from markupsafe import Markup, escape
 from werkzeug.routing import BaseConverter, ValidationError
 
@@ -54,6 +55,31 @@ class VerbConverter(BaseConverter):
 app = Flask(__name__)
 app.url_map.converters["isodate"] = IsoDateConverter
 app.url_map.converters["verb"] = VerbConverter
+
+
+def _compute_static_hash() -> str:
+    """Hash of the bundled static files. Stable per deploy; changes when any
+    asset (CSS/img/template-referenced file) changes, busting browser caches.
+    """
+    static_dir = Path(app.static_folder) if app.static_folder else None
+    if not static_dir or not static_dir.exists():
+        return "0"
+    h = hashlib.sha256()
+    for path in sorted(static_dir.rglob("*")):
+        if path.is_file():
+            h.update(path.read_bytes())
+    return h.hexdigest()[:12]
+
+
+STATIC_HASH = _compute_static_hash()
+
+
+@app.context_processor
+def _static_helpers() -> dict[str, Any]:
+    def vstatic(filename: str) -> str:
+        return f"{url_for('static', filename=filename)}?v={STATIC_HASH}"
+
+    return {"vstatic": vstatic}
 
 
 @app.template_filter("pt")

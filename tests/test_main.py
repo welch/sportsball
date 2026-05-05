@@ -159,6 +159,20 @@ def test_index_has_viewport_meta(monkeypatch: pytest.MonkeyPatch, fixed_now: dat
     assert b"width=device-width" in response.data
 
 
+def test_static_urls_carry_cache_bust_version(
+    monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
+) -> None:
+    monkeypatch.setattr(main, "_events", lambda: [])
+    response = main.app.test_client().get("/")
+    body = response.data.decode()
+    # All static asset references must include the ?v=<hash> query.
+    assert f"/static/css/8ball.css?v={main.STATIC_HASH}" in body
+    assert f"/static/img/icon-48.png?v={main.STATIC_HASH}" in body
+    assert f"/static/img/8ball-no-1.gif?v={main.STATIC_HASH}" in body
+    # And the hash isn't trivially empty.
+    assert len(main.STATIC_HASH) >= 8
+
+
 def test_index_today_shows_quiet_until_line(
     monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
 ) -> None:
