@@ -201,6 +201,40 @@ def test_index_shows_last_updated_footer(
     main._cache["fetched_at"] = 0.0
 
 
+def test_index_footer_links_to_github_repo(
+    monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
+) -> None:
+    import time as _time
+
+    main._cache["events"] = []
+    main._cache["fetched_at"] = _time.time()
+    monkeypatch.setattr(main, "_events", lambda: [])
+    response = main.app.test_client().get("/")
+    body = response.data
+    # Anchor wrapping the footer text, opening in a new tab with safe rel.
+    assert b'href="https://github.com/welch/sportsball"' in body
+    assert b'target="_blank"' in body
+    assert b'rel="noopener noreferrer"' in body
+    # The anchor wraps the existing footer text, not a separate node.
+    assert b'sportsball" target="_blank" rel="noopener noreferrer">last updated ' in body
+    main._cache["events"] = None
+    main._cache["fetched_at"] = 0.0
+
+
+def test_footer_link_inherits_styling_in_served_css() -> None:
+    response = main.app.test_client().get("/static/css/8ball.css")
+    assert response.status_code == 200
+    css = response.data.decode()
+    # Anchor must inherit color and drop underline across all link states so
+    # the footer looks identical whether visited or not.
+    assert "footer a" in css
+    assert "footer a:hover" in css
+    assert "footer a:visited" in css
+    assert "footer a:active" in css
+    assert "color: inherit" in css
+    assert "text-decoration: none" in css
+
+
 def test_refresh_requires_cron_header(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(main, "_events", lambda: [])
     response = main.app.test_client().get("/tasks/refresh")
