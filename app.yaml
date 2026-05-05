@@ -2,6 +2,9 @@ runtime: python312
 
 entrypoint: gunicorn -b :$PORT sportsball.main:app
 
+includes:
+  - env.yaml
+
 handlers:
   - url: /static
     static_dir: static
