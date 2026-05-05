@@ -1,6 +1,6 @@
 runtime: python312
 
-entrypoint: gunicorn -b :$PORT sportsball.main:app
+entrypoint: gunicorn -b :$PORT --pythonpath src sportsball.main:app
 
 includes:
   - env.yaml

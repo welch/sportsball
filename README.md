@@ -56,8 +56,13 @@ Variables:
 
 ```sh
 gcloud app deploy app.yaml --project sports-ball
-gcloud app deploy cron.yaml --project sports-ball
+# (cron.yaml — skip until /tasks/refresh is implemented)
 ```
 
 `env.yaml` is bundled automatically — `.gitignore` keeps it out of git, but
 `.gcloudignore` does NOT exclude it, so it ships with the deploy.
+
+`requirements.txt` is the source of truth for the GAE python312 buildpack
+(it doesn't read `uv.lock` directly). It's regenerated from `uv.lock` by a
+pre-commit hook whenever the lock changes; CI verifies the two stay in
+sync. Don't hand-edit it.

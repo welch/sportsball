@@ -23,3 +23,10 @@ repos:
         language: system
         types: [python]
         pass_filenames: false
+
+      - id: uv-export-requirements
+        name: regenerate requirements.txt from uv.lock
+        entry: uv export --no-dev --no-emit-project --quiet --output-file requirements.txt
+        language: system
+        files: '^(uv\.lock|pyproject\.toml)$'
+        pass_filenames: false

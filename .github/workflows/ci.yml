@@ -33,3 +33,8 @@ jobs:
 
       - name: Test
         run: uv run pytest
+
+      - name: requirements.txt is in sync with uv.lock
+        run: |
+          uv export --no-dev --no-emit-project --quiet --output-file requirements.txt
+          git diff --exit-code requirements.txt

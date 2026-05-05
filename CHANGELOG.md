@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Production deploy on GAE Standard python312 working at
+  `https://sports-ball.appspot.com/`. Required:
+  - Generate `requirements.txt` from `uv.lock` (the python312 buildpack
+    reads `requirements.txt`, not `uv.lock`). Pre-commit hook keeps it
+    in sync; CI fails on drift.
+  - `--pythonpath src` in the gunicorn entrypoint so the `src/` package
+    layout resolves at runtime.
+  - One-time IAM grant of `roles/cloudbuild.builds.builder` to the App
+    Engine default service account on this older project (modern projects
+    auto-grant; pre-second-gen ones don't).
+  - One-time enable of `artifactregistry.googleapis.com` and
+    `cloudbuild.googleapis.com`.
 - `VERB` env var sets the default verb in the page title, read at request
   time. Falls back to `hosed` when unset. URL-segment verbs still override
   per-request. Lets the rude default stay out of git via `env.yaml`.
