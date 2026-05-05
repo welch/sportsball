@@ -51,6 +51,12 @@ Variables:
 - `VERB` — optional. Default verb in the title ("Is my day _verb_?").
   Defaults to `hosed` if unset. URL-segment verbs (`/<verb>/`) still
   override per-request.
+- `HEALTH_TOKEN` — required to view `/health/<token>`. 32-char hex value
+  recommended (`python -c 'import secrets; print(secrets.token_hex(16))'`).
+  Wrong-or-missing-token requests return 404 so the endpoint stays
+  invisible to scanners. The page shows per-adapter status, the rolling
+  24-hour HTTP request counts, and event-cache age — load it in a
+  browser when you want a quick read on the deploy.
 
 ## Deploy
 

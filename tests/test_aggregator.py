@@ -29,7 +29,7 @@ def test_fetch_all_filters_to_tracked_venues() -> None:
             _ev("Warriors at home", "Chase Center", "2026-05-04T19:00:00+00:00", "w", "1"),
         ]
 
-    events = fetch_all([adapter_a, adapter_b])
+    events = fetch_all([("a", adapter_a), ("b", adapter_b)])
     assert {e.venue for e in events} == {"Oracle Park", "Chase Center"}
     assert len(events) == 2
 
@@ -42,7 +42,7 @@ def test_fetch_all_survives_one_failing_adapter(caplog: pytest.LogCaptureFixture
         raise RuntimeError("upstream API blew up")
 
     with caplog.at_level("ERROR", logger="sportsball.aggregator"):
-        events = fetch_all([good, bad])
+        events = fetch_all([("good", good), ("bad", bad)])
     assert len(events) == 1
     assert events[0].source_id == "1"
     assert any(

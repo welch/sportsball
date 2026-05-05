@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex,nofollow">
+    <title>sportsball health</title>
+    <style>
+      body { font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+             max-width: 880px; margin: 1.5em auto; padding: 0 1em; color: #222; }
+      h1 { font-size: 1.4em; margin: 0 0 .25em; }
+      h2 { font-size: 1.1em; margin: 1.5em 0 .5em; border-bottom: 1px solid #ddd;
+           padding-bottom: .25em; }
+      .meta { color: #666; font-size: .9em; }
+      table { border-collapse: collapse; width: 100%; margin-top: .5em; }
+      th, td { padding: .35em .6em; text-align: left; vertical-align: top;
+               border-bottom: 1px solid #eee; }
+      th { background: #f6f6f6; font-weight: 600; }
+      td.num { text-align: right; font-variant-numeric: tabular-nums; }
+      .adapter-name { font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+                      font-size: .92em; }
+      .ok { color: #2a7a2a; }
+      .err { color: #b22222; }
+      .muted { color: #888; }
+      .err-msg { font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+                 font-size: .85em; white-space: pre-wrap; word-break: break-word; }
+    </style>
+  </head>
+  <body>
+    <h1>sportsball health</h1>
+    <p class="meta">as of <time datetime="{{ now.isoformat() }}">{{ now.strftime('%a %b %-d, %-I:%M:%S %p %Z') }}</time></p>
+
+    <h2>Adapters</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Adapter</th>
+          <th>Last success</th>
+          <th class="num">Events</th>
+          <th>Last failure</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for a in adapters %}
+          <tr>
+            <td class="adapter-name">{{ a.name }}</td>
+            <td>
+              {% if a.last_success_at %}
+                <span class="ok">{{ a.last_success_at.strftime('%a %b %-d, %-I:%M:%S %p %Z') }}</span>
+                <span class="muted">({{ humanize_age((now - a.last_success_at).total_seconds()) }})</span>
+              {% else %}
+                <span class="muted">never</span>
+              {% endif %}
+            </td>
+            <td class="num">
+              {% if a.last_event_count is not none %}{{ a.last_event_count }}{% else %}<span class="muted">—</span>{% endif %}
+            </td>
+            <td>
+              {% if a.last_failure_at %}
+                <span class="err">{{ a.last_failure_at.strftime('%a %b %-d, %-I:%M:%S %p %Z') }}</span>
+                <span class="muted">({{ humanize_age((now - a.last_failure_at).total_seconds()) }})</span>
+                <div class="err-msg err">{{ a.last_error }}</div>
+              {% else %}
+                <span class="muted">none</span>
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <h2>HTTP requests (last 24h)</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Class</th>
+          <th class="num">Count</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Total</strong></td>
+          <td class="num"><strong>{{ request_summary.total }}</strong></td>
+        </tr>
+        {% for cls in ["2xx", "3xx", "4xx", "5xx"] %}
+          <tr>
+            <td>{{ cls }}</td>
+            <td class="num">{{ request_summary.by_class.get(cls, 0) }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <h2>Event cache</h2>
+    <table>
+      <tbody>
+        <tr>
+          <th>Events cached</th>
+          <td class="num">{{ cache_event_count }}</td>
+        </tr>
+        <tr>
+          <th>Last refresh</th>
+          <td>
+            {% if cache_fetched_at %}
+              {{ cache_fetched_at.strftime('%a %b %-d, %-I:%M:%S %p %Z') }}
+            {% else %}
+              <span class="muted">never</span>
+            {% endif %}
+          </td>
+        </tr>
+        <tr>
+          <th>Age</th>
+          <td>
+            {% if cache_age_label %}
+              {{ cache_age_label }}
+            {% else %}
+              <span class="muted">—</span>
+            {% endif %}
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </body>
+</html>

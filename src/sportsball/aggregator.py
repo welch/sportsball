@@ -10,6 +10,7 @@ PT = ZoneInfo("America/Los_Angeles")
 TRACKED_VENUES = frozenset({"Oracle Park", "Chase Center"})
 
 EventFetcher = Callable[[], list[Event]]
+NamedAdapter = tuple[str, EventFetcher]
 
 log = logging.getLogger(__name__)
 
@@ -23,15 +24,30 @@ class Status:
     next_quiet_date: date | None = None
 
 
-def fetch_all(adapters: list[EventFetcher]) -> list[Event]:
+def fetch_all(adapters: list[NamedAdapter]) -> list[Event]:
+    """Run each named adapter, recording success/failure to `stats`.
+
+    Each adapter gets a stable `name` (e.g. ``"giants.fetch_events"``) so
+    the health endpoint can report per-source timestamps. One failing
+    source still doesn't blank the page — the failure is logged and
+    recorded, and the remaining adapters' events render.
+    """
+    # Imported lazily to keep `aggregator` importable from `stats` without
+    # introducing a circular import.
+    from sportsball import stats
+
     events: list[Event] = []
-    for fetch in adapters:
+    for name, fetch in adapters:
         try:
-            events.extend(fetch())
-        except Exception:
-            # One bad source shouldn't blank the page. Log and continue.
-            log.exception("adapter %s failed", getattr(fetch, "__name__", repr(fetch)))
-    return [e for e in events if e.venue in TRACKED_VENUES]
+            fetched = fetch()
+        except Exception as exc:
+            log.exception("adapter %s failed", name)
+            stats.record_adapter_failure(name, f"{type(exc).__name__}: {exc}")
+            continue
+        kept = [e for e in fetched if e.venue in TRACKED_VENUES]
+        stats.record_adapter_success(name, len(kept))
+        events.extend(kept)
+    return events
 
 
 def compute_status(events: list[Event], now: datetime) -> Status:
