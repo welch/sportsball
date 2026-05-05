@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Pulsing-glow effect on the 8-ball's answer window. A duplicate of the
+  ball image is layered over the base, clipped to a circle around the
+  answer window (`circle(23% at 50% 47%)`), and animated with a 3-second
+  filter pulse (drop-shadow + brightness + contrast) that holds at peak
+  for a third of the cycle. The base image stays static, so only the
+  "SIGNS POINT TO YES" / "OUTLOOK NOT SO GOOD" / etc. region shimmers.
+
 ## [0.3.0] - 2026-05-05
 
 ### Added

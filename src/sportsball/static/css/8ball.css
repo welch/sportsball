@@ -68,11 +68,38 @@ p {
     padding: 60px;
     border-radius: 50%;
     line-height: 0;
+    position: relative;
 }
 
-.ball-frame img {
+.ball-frame > img {
     max-width: 100%;
     height: auto;
+    display: block;
+}
+
+/* A duplicate of the ball image, positioned exactly over the base, clipped
+ * to just the answer window. The animation pulses only this overlay, so the
+ * shimmer is confined to the window region while the rest of the ball stays
+ * static.
+ */
+.ball-glow {
+    position: absolute;
+    top: 60px;
+    left: 60px;
+    pointer-events: none;
+    clip-path: circle(23% at 50% 47%);
+    animation: ball-glow 3s ease-in-out infinite;
+}
+
+@keyframes ball-glow {
+    0%,
+    100% {
+        filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.3)) brightness(1) contrast(1);
+    }
+    33%,
+    67% {
+        filter: drop-shadow(0 0 22px rgba(255, 255, 255, 0.85)) brightness(1.25) contrast(1.15);
+    }
 }
 
 .ball-frame.halo-giants {
@@ -199,5 +226,9 @@ footer {
     }
     .ball-frame {
         padding: 40px;
+    }
+    .ball-glow {
+        top: 40px;
+        left: 40px;
     }
 }

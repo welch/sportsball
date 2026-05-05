@@ -21,9 +21,11 @@
       <h1>Is my day <span class="verb{% if verb_class %} {{ verb_class }}{% endif %}">{{ verb }}?</span></h1>
 
       <div class="ball-frame{% if giants_active %} halo-giants{% endif %}{% if warriors_active %} halo-warriors{% endif %}{% if concert_active %} halo-concert{% endif %}">
-        <img src="{{ vstatic('img/8ball-' + ('yes' if fucked else 'no') + '-1.gif') }}"
-             width="216" height="215"
+        {% set ball_src = vstatic('img/8ball-' + ('yes' if fucked else 'no') + '-1.gif') %}
+        <img src="{{ ball_src }}" width="216" height="215"
              alt="{{ 'Yes' if fucked else 'No' }}">
+        <img class="ball-glow" src="{{ ball_src }}" width="216" height="215"
+             alt="" aria-hidden="true">
       </div>
 
       <div class="page-date{% if verb_class %} {{ verb_class }}{% endif %}">
