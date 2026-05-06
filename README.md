@@ -58,6 +58,14 @@ Variables:
   invisible to scanners. The page shows per-adapter status, the rolling
   24-hour HTTP request counts, and event-cache age — load it in a
   browser when you want a quick read on the deploy.
+- `EVENTS_BUCKET` — optional. Cloud Storage bucket where the cron writes
+  the canonical events snapshot (`events.json`) once a day. Serving
+  instances read it on cold start, so the page's "last updated"
+  timestamp reflects the cron time and instances skip the multi-adapter
+  fetch. Leave unset locally — `_events()` falls back to fetching
+  adapters directly. The GAE default bucket (`<project-id>.appspot.com`)
+  is convenient: zero extra setup, and the App Engine default service
+  account has write access by default.
 - `CANONICAL_HOST` — optional. Bare hostname (no scheme, no path,
   e.g. `example.com`) to canonicalize on. When set, any request whose
   `Host` header doesn't match is 301-redirected to

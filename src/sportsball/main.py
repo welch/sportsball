@@ -1,4 +1,5 @@
 import hashlib
+import logging
 import os
 import threading
 import time
@@ -13,7 +14,7 @@ from markupsafe import Markup, escape
 from werkzeug.routing import BaseConverter, ValidationError
 from werkzeug.wrappers import Response
 
-from sportsball import stats
+from sportsball import stats, store
 from sportsball.adapters import giants, ticketmaster, warriors
 from sportsball.aggregator import PT, compute_status, fetch_all
 from sportsball.models import Event
@@ -57,6 +58,8 @@ class VerbConverter(BaseConverter):
 app = Flask(__name__)
 app.url_map.converters["isodate"] = IsoDateConverter
 app.url_map.converters["verb"] = VerbConverter
+
+log = logging.getLogger(__name__)
 
 
 @app.before_request
@@ -149,10 +152,23 @@ def _adapters() -> list[tuple[str, Any]]:
 
 
 def _events() -> list[Event]:
+    """Return the cached event list, refreshing from storage when stale.
+
+    Cache miss → try Cloud Storage first (cron writes a snapshot daily).
+    If the blob is missing or unreadable, fall back to fetching adapters
+    directly so local dev (no `EVENTS_BUCKET` set) keeps working.
+    """
     with _cache_lock:
-        if _cache["events"] is None or time.time() - _cache["fetched_at"] > CACHE_TTL_SECONDS:
-            _cache["events"] = fetch_all(_adapters())
-            _cache["fetched_at"] = time.time()
+        stale = _cache["events"] is None or time.time() - _cache["fetched_at"] > CACHE_TTL_SECONDS
+        if stale:
+            stored = store.read_events()
+            if stored is not None:
+                events, fetched_at = stored
+                _cache["events"] = events
+                _cache["fetched_at"] = fetched_at.timestamp()
+            else:
+                _cache["events"] = fetch_all(_adapters())
+                _cache["fetched_at"] = time.time()
         return _cache["events"]
 
 
@@ -311,16 +327,24 @@ def health(token: str) -> str:
 
 @app.get("/tasks/refresh")
 def refresh() -> tuple[str, int]:
-    """Invalidate the in-memory event cache and refill it.
+    """Fetch events from all adapters and persist the snapshot.
 
-    Gated by the X-Appengine-Cron header — GAE injects this only on cron
-    invocations and strips it from external requests, so external callers
-    can't trigger a refetch storm.
+    Cron is the only writer. Gated by the X-Appengine-Cron header — GAE
+    injects this only on cron invocations and strips it from external
+    requests, so external callers can't trigger a refetch storm. After
+    the storage write, this instance's local cache is updated so the
+    "last updated" timestamp the page displays reflects the cron time
+    rather than each instance's own first-fetch.
     """
     if request.headers.get("X-Appengine-Cron") != "true":
         abort(403)
+    events = fetch_all(_adapters())
+    fetched_at = datetime.now(tz=PT)
+    try:
+        store.write_events(events, fetched_at)
+    except Exception:
+        log.exception("storage write failed; cron continued with local cache only")
     with _cache_lock:
-        _cache["events"] = None
-        _cache["fetched_at"] = 0.0
-    events = _events()
+        _cache["events"] = events
+        _cache["fetched_at"] = fetched_at.timestamp()
     return f"refreshed: {len(events)} events\n", 200

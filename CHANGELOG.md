@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Cloud Storage backing for the events snapshot. Cron now fetches all
+  adapters, writes the resulting events list + `fetched_at` timestamp
+  to `gs://$EVENTS_BUCKET/events.json` (one ~200 KB JSON blob), and
+  updates the local cache. Serving instances read that blob on cold
+  start instead of re-fetching adapters individually — cuts a fresh
+  instance's first-request latency from a multi-second multi-adapter
+  fetch (the NBA league feed alone is ~8 MB) to a single small
+  Storage read.
+- `_events()` reads from Cloud Storage on cache miss and falls back to
+  direct adapter fetching when the bucket is unset (local dev) or the
+  blob is missing/unreadable. Local dev keeps working.
+
+### Changed
+
+- The page's "last updated" timestamp now reflects the cron's
+  `fetched_at` (read out of the stored blob), not each instance's own
+  first-fetch time. So a fresh 9 AM instance still shows "last updated
+  06:00" — matching the actual upstream-data refresh frequency.
+- `tests/conftest.py` now clears env-driven configuration (`VERB`,
+  `CANONICAL_HOST`, `HEALTH_TOKEN`, `EVENTS_BUCKET`) before each test
+  so the suite is hermetic regardless of the developer's local `env.yaml`.
+
 ## [0.4.0] - 2026-05-06
 
 ### Added

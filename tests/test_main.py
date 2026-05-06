@@ -246,23 +246,87 @@ def test_refresh_requires_cron_header(monkeypatch: pytest.MonkeyPatch) -> None:
     assert response.status_code == 403
 
 
-def test_refresh_with_cron_header_invalidates_cache(monkeypatch: pytest.MonkeyPatch) -> None:
-    calls = {"count": 0}
+def test_refresh_fetches_writes_storage_and_updates_cache(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fetched_events: list = ["e1", "e2"]
+    fetch_calls = {"n": 0}
 
-    def fake_events() -> list:
-        calls["count"] += 1
-        return []
+    def fake_fetch_all(adapters: list) -> list:
+        fetch_calls["n"] += 1
+        return fetched_events
 
-    # Pre-warm cache with stale data so we can verify it's bypassed.
-    main._cache["events"] = ["should be replaced"]
-    main._cache["fetched_at"] = 9_999_999_999.0
-    monkeypatch.setattr(main, "_events", fake_events)
+    write_calls: list[tuple] = []
+
+    def fake_write(events: list, fetched_at: object) -> None:
+        write_calls.append((events, fetched_at))
+
+    monkeypatch.setattr(main, "fetch_all", fake_fetch_all)
+    monkeypatch.setattr(main.store, "write_events", fake_write)
+    main._cache["events"] = None
+    main._cache["fetched_at"] = 0.0
 
     response = main.app.test_client().get("/tasks/refresh", headers={"X-Appengine-Cron": "true"})
     assert response.status_code == 200
-    assert b"refreshed" in response.data
-    assert calls["count"] == 1
-    # Reset cache state for downstream tests.
+    assert b"refreshed: 2 events" in response.data
+    assert fetch_calls["n"] == 1
+    assert len(write_calls) == 1
+    # Local cache is now populated with the fresh events.
+    assert main._cache["events"] is fetched_events
+    assert main._cache["fetched_at"] > 0.0
+    # Cleanup for downstream tests.
+    main._cache["events"] = None
+    main._cache["fetched_at"] = 0.0
+
+
+def test_refresh_continues_when_storage_write_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(main, "fetch_all", lambda adapters: [])
+
+    def boom(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("storage unreachable")
+
+    monkeypatch.setattr(main.store, "write_events", boom)
+    main._cache["events"] = None
+    main._cache["fetched_at"] = 0.0
+
+    response = main.app.test_client().get("/tasks/refresh", headers={"X-Appengine-Cron": "true"})
+    # Storage failure shouldn't break the cron — local cache still updated.
+    assert response.status_code == 200
+    assert main._cache["events"] == []
+    main._cache["events"] = None
+    main._cache["fetched_at"] = 0.0
+
+
+def test_events_reads_from_storage_on_cache_miss(monkeypatch: pytest.MonkeyPatch) -> None:
+    from datetime import datetime as _datetime
+
+    stored_events: list = ["from-storage"]
+    stored_at = _datetime(2026, 5, 6, 6, 0, tzinfo=PT)
+    monkeypatch.setattr(main.store, "read_events", lambda: (stored_events, stored_at))
+    # fetch_all should NOT be called when storage returns data.
+    monkeypatch.setattr(main, "fetch_all", lambda adapters: pytest.fail("should not fetch"))
+    main._cache["events"] = None
+    main._cache["fetched_at"] = 0.0
+
+    result = main._events()
+    assert result is stored_events
+    assert main._cache["fetched_at"] == stored_at.timestamp()
+    main._cache["events"] = None
+    main._cache["fetched_at"] = 0.0
+
+
+def test_events_falls_back_to_adapters_when_storage_empty(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(main.store, "read_events", lambda: None)
+    monkeypatch.setattr(main, "fetch_all", lambda adapters: ["from-fetch"])
+    main._cache["events"] = None
+    main._cache["fetched_at"] = 0.0
+
+    result = main._events()
+    assert result == ["from-fetch"]
     main._cache["events"] = None
     main._cache["fetched_at"] = 0.0
 
