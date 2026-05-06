@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `/health/<token>` status page, gated by the `HEALTH_TOKEN` env var
+  (wrong/missing token 404s — never reveals the endpoint exists). Renders
+  a plain HTML snapshot of: per-adapter last-success / last-failure
+  timestamps + event count + error message; rolling 24-hour HTTP request
+  totals broken down by status-code class (2xx/3xx/4xx/5xx); cached event
+  count and last-refresh age in human-friendly form. Backed by a new
+  `sportsball.stats` module — thread-safe in-process telemetry over a
+  pruned `deque`, no new dependencies. `aggregator.fetch_all` now takes
+  named adapter tuples and records success/failure per source. The health
+  endpoint itself is excluded from the request counter so reloading it
+  doesn't pollute the numbers.
 - Pulsing-glow effect on the 8-ball's answer window. A duplicate of the
   ball image is layered over the base, clipped to a circle around the
   answer window (`circle(23% at 50% 47%)`), and animated with a 3-second

@@ -12,6 +12,7 @@ from flask import Flask, abort, render_template, request, url_for
 from markupsafe import Markup, escape
 from werkzeug.routing import BaseConverter, ValidationError
 
+from sportsball import stats
 from sportsball.adapters import giants, ticketmaster, warriors
 from sportsball.aggregator import PT, compute_status, fetch_all
 from sportsball.models import Event
@@ -111,13 +112,21 @@ _cache_lock = threading.Lock()
 _cache: dict[str, Any] = {"events": None, "fetched_at": 0.0}
 
 
-def _adapters() -> list:
+ADAPTER_NAMES: tuple[str, ...] = (
+    "giants.fetch_events",
+    "warriors.fetch_events",
+    "ticketmaster.fetch_oracle_park_events",
+    "ticketmaster.fetch_chase_center_events",
+)
+
+
+def _adapters() -> list[tuple[str, Any]]:
     year = datetime.now(tz=PT).year
     return [
-        lambda: giants.fetch_events(season=year),
-        warriors.fetch_events,
-        ticketmaster.fetch_oracle_park_events,
-        ticketmaster.fetch_chase_center_events,
+        ("giants.fetch_events", lambda: giants.fetch_events(season=year)),
+        ("warriors.fetch_events", warriors.fetch_events),
+        ("ticketmaster.fetch_oracle_park_events", ticketmaster.fetch_oracle_park_events),
+        ("ticketmaster.fetch_chase_center_events", ticketmaster.fetch_chase_center_events),
     ]
 
 
@@ -206,9 +215,80 @@ def _last_updated_label() -> str | None:
     return datetime.fromtimestamp(ts, tz=PT).strftime("%a %b %-d, %-I:%M %p %Z")
 
 
+def _humanize_age(seconds: float) -> str:
+    """Render a non-negative duration as e.g. ``"3 minutes ago"``.
+
+    Picks the largest reasonable unit and rounds: seconds under a minute,
+    minutes under an hour, hours (one decimal) under a day, then days.
+    """
+    if seconds < 0:
+        seconds = 0.0
+    if seconds < 60:
+        n = int(seconds)
+        unit = "second" if n == 1 else "seconds"
+        return f"{n} {unit} ago"
+    if seconds < 3600:
+        n = int(seconds // 60)
+        unit = "minute" if n == 1 else "minutes"
+        return f"{n} {unit} ago"
+    if seconds < 86400:
+        hours = seconds / 3600
+        unit = "hour" if 0.95 <= hours < 1.05 else "hours"
+        return f"{hours:.1f} {unit} ago"
+    days = seconds / 86400
+    unit = "day" if 0.95 <= days < 1.05 else "days"
+    return f"{days:.1f} {unit} ago"
+
+
+def _is_health_path(path: str) -> bool:
+    return path.startswith("/health/")
+
+
+@app.after_request
+def _record_request_end(response: Any) -> Any:
+    """Tally each completed response into the rolling 24-hour stats deque.
+
+    The health page is intentionally excluded so reloading it doesn't
+    inflate its own counters.
+    """
+    if not _is_health_path(request.path):
+        stats.record_request(response.status_code)
+    return response
+
+
 @app.get("/healthz")
 def healthz() -> tuple[str, int]:
     return "ok", 200
+
+
+@app.get("/health/<token>")
+def health(token: str) -> str:
+    """Token-gated status page. Wrong token 404s — never reveals existence.
+
+    Renders an HTML snapshot of: per-adapter last success/failure, the
+    24-hour HTTP request counters, and current cache contents. Idle (no
+    auto-refresh); the user reloads when they want fresh numbers.
+    """
+    expected = os.environ.get("HEALTH_TOKEN")
+    if not expected or token != expected:
+        abort(404)
+    now = datetime.now(tz=PT)
+    cache_fetched_ts = _cache["fetched_at"] or 0.0
+    cache_fetched_at = datetime.fromtimestamp(cache_fetched_ts, tz=PT) if cache_fetched_ts else None
+    cache_age_label: str | None = None
+    if cache_fetched_at is not None:
+        cache_age_label = _humanize_age((now - cache_fetched_at).total_seconds())
+    cached_events = _cache["events"] or []
+    return render_template(
+        "health.html",
+        now=now,
+        adapters=stats.adapter_stats(ADAPTER_NAMES),
+        request_summary=stats.request_summary(),
+        cache_event_count=len(cached_events),
+        cache_fetched_at=cache_fetched_at,
+        cache_age_label=cache_age_label,
+        humanize_age=_humanize_age,
+    )
 
 
 @app.get("/tasks/refresh")

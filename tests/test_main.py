@@ -3,11 +3,16 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from sportsball import main
+from sportsball import main, stats
 from sportsball.aggregator import PT
 from sportsball.models import Event
 
 UTC = ZoneInfo("UTC")
+
+
+@pytest.fixture(autouse=True)
+def _reset_stats() -> None:
+    stats.reset()
 
 
 @pytest.fixture
@@ -420,3 +425,110 @@ def test_index_warriors_colorized_and_blue_verb(
     assert b"halo-warriors" in response.data
     assert b"halo-giants" not in response.data
     assert b'class="verb warriors"' in response.data
+
+
+# ---------------------------------------------------------------------------
+# /health/<token>
+# ---------------------------------------------------------------------------
+
+
+def test_health_wrong_token_404(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("HEALTH_TOKEN", "right-token")
+    response = main.app.test_client().get("/health/wrong-token")
+    assert response.status_code == 404
+
+
+def test_health_unset_token_env_404(monkeypatch: pytest.MonkeyPatch) -> None:
+    # If the env var isn't set we shouldn't authorize anyone — including the
+    # empty string — and we should never give a 200.
+    monkeypatch.delenv("HEALTH_TOKEN", raising=False)
+    response = main.app.test_client().get("/health/anything")
+    assert response.status_code == 404
+
+
+def test_health_right_token_renders_status(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("HEALTH_TOKEN", "secret")
+    stats.record_adapter_success("giants.fetch_events", 5)
+    stats.record_adapter_failure("warriors.fetch_events", "RuntimeError: boom")
+    main._cache["events"] = []
+    main._cache["fetched_at"] = 0.0
+    try:
+        response = main.app.test_client().get("/health/secret")
+    finally:
+        main._cache["events"] = None
+        main._cache["fetched_at"] = 0.0
+    assert response.status_code == 200
+    body = response.data.decode()
+    # All four adapters listed by canonical name.
+    assert "giants.fetch_events" in body
+    assert "warriors.fetch_events" in body
+    assert "ticketmaster.fetch_oracle_park_events" in body
+    assert "ticketmaster.fetch_chase_center_events" in body
+    # Recorded telemetry surfaces in the page.
+    import re
+
+    assert re.search(r"<td[^>]*>\s*5\s*</td>", body)  # giants event count cell
+    assert "RuntimeError: boom" in body
+    # Section headings + cache counters present.
+    assert "Adapters" in body
+    assert "HTTP requests" in body
+    assert "Event cache" in body
+
+
+def test_health_endpoint_does_not_count_itself(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("HEALTH_TOKEN", "secret")
+    main.app.test_client().get("/health/secret")
+    main.app.test_client().get("/health/wrong")  # also a /health/ path → skipped
+    assert stats.request_summary().total == 0
+
+
+def test_request_hook_records_other_routes(
+    monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
+) -> None:
+    monkeypatch.setattr(main, "_events", lambda: [])
+    main.app.test_client().get("/")
+    main.app.test_client().get("/healthz")
+    main.app.test_client().get("/2026-13-32")  # 404
+    summary = stats.request_summary()
+    assert summary.total == 3
+    assert summary.by_class["2xx"] == 2
+    assert summary.by_class["4xx"] == 1
+
+
+def test_health_records_per_adapter_via_fetch_all(monkeypatch: pytest.MonkeyPatch) -> None:
+    """End-to-end: a fetch_all run records per-adapter outcomes."""
+    from sportsball.aggregator import fetch_all
+
+    def good() -> list[Event]:
+        return [
+            Event(
+                source="t",
+                source_id="1",
+                name="Mets at Giants",
+                starts_at=datetime.fromisoformat("2026-05-05T02:05:00+00:00"),
+                venue="Oracle Park",
+            )
+        ]
+
+    def bad() -> list[Event]:
+        raise RuntimeError("nope")
+
+    fetch_all([("giants.fetch_events", good), ("warriors.fetch_events", bad)])
+    snaps = {s.name: s for s in stats.adapter_stats(list(main.ADAPTER_NAMES))}
+    assert snaps["giants.fetch_events"].last_event_count == 1
+    assert snaps["giants.fetch_events"].last_error is None
+    assert snaps["warriors.fetch_events"].last_error is not None
+    assert "nope" in (snaps["warriors.fetch_events"].last_error or "")
+
+
+def test_humanize_age_units() -> None:
+    assert main._humanize_age(0) == "0 seconds ago"
+    assert main._humanize_age(1) == "1 second ago"
+    assert main._humanize_age(45) == "45 seconds ago"
+    assert main._humanize_age(60) == "1 minute ago"
+    assert main._humanize_age(180) == "3 minutes ago"
+    # 1.2h → "1.2 hours ago"
+    assert main._humanize_age(3600 * 1.2) == "1.2 hours ago"
+    # exactly 1 day → "1.0 day ago"
+    assert main._humanize_age(86400) == "1.0 day ago"
+    assert main._humanize_age(86400 * 3.5) == "3.5 days ago"
