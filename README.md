@@ -41,6 +41,7 @@ Format:
 env_variables:
   TICKETMASTER_API_KEY: <your-key>
   VERB: <default-verb-shown-in-page-title>
+  CANONICAL_HOST: <your-canonical-host>
   # add more as needed
 ```
 
@@ -57,6 +58,13 @@ Variables:
   invisible to scanners. The page shows per-adapter status, the rolling
   24-hour HTTP request counts, and event-cache age — load it in a
   browser when you want a quick read on the deploy.
+- `CANONICAL_HOST` — optional. Bare hostname (no scheme, no path,
+  e.g. `example.com`) to canonicalize on. When set, any request whose
+  `Host` header doesn't match is 301-redirected to
+  `https://$CANONICAL_HOST<path>?<query>`. `/healthz` and requests
+  carrying `X-Appengine-Cron: true` are exempt so GAE health checks and
+  cron keep working on the appspot host. Leave unset locally so dev
+  requests on `localhost` aren't redirected.
 
 ## Deploy
 

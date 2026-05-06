@@ -411,6 +411,64 @@ def test_index_mixed_sports_and_concert_neutral_verb(
     assert b'class="verb concert"' not in response.data
 
 
+def test_canonical_host_no_redirect_when_host_matches(
+    monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
+) -> None:
+    monkeypatch.setenv("CANONICAL_HOST", "example.com")
+    monkeypatch.setattr(main, "_events", lambda: [])
+    response = main.app.test_client().get("/", headers={"Host": "example.com"})
+    assert response.status_code == 200
+
+
+def test_canonical_host_redirects_non_canonical_host(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CANONICAL_HOST", "example.com")
+    response = main.app.test_client().get("/", headers={"Host": "sports-ball.appspot.com"})
+    assert response.status_code == 301
+    # Werkzeug normalizes a bare trailing "?" off the Location URL.
+    assert response.headers["Location"].rstrip("?") == "https://example.com/"
+
+
+def test_canonical_host_redirect_preserves_query_string(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CANONICAL_HOST", "example.com")
+    response = main.app.test_client().get(
+        "/some/path?foo=bar", headers={"Host": "sports-ball.appspot.com"}
+    )
+    assert response.status_code == 301
+    assert response.headers["Location"].endswith("?foo=bar")
+    assert response.headers["Location"] == "https://example.com/some/path?foo=bar"
+
+
+def test_canonical_host_does_not_redirect_healthz(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CANONICAL_HOST", "example.com")
+    response = main.app.test_client().get("/healthz", headers={"Host": "sports-ball.appspot.com"})
+    assert response.status_code == 200
+    assert response.data == b"ok"
+
+
+def test_canonical_host_does_not_redirect_cron(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CANONICAL_HOST", "example.com")
+    monkeypatch.setattr(main, "_events", lambda: [])
+    response = main.app.test_client().get(
+        "/tasks/refresh",
+        headers={"Host": "sports-ball.appspot.com", "X-Appengine-Cron": "true"},
+    )
+    assert response.status_code == 200
+    # Reset cache state for downstream tests.
+    main._cache["events"] = None
+    main._cache["fetched_at"] = 0.0
+
+
+def test_canonical_host_unset_never_redirects(
+    monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
+) -> None:
+    monkeypatch.delenv("CANONICAL_HOST", raising=False)
+    monkeypatch.setattr(main, "_events", lambda: [])
+    response = main.app.test_client().get("/", headers={"Host": "localhost:5000"})
+    assert response.status_code == 200
+
+
 def test_index_warriors_colorized_and_blue_verb(
     monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
 ) -> None:

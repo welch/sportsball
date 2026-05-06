@@ -8,9 +8,10 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from flask import Flask, abort, render_template, request, url_for
+from flask import Flask, abort, redirect, render_template, request, url_for
 from markupsafe import Markup, escape
 from werkzeug.routing import BaseConverter, ValidationError
+from werkzeug.wrappers import Response
 
 from sportsball import stats
 from sportsball.adapters import giants, ticketmaster, warriors
@@ -56,6 +57,23 @@ class VerbConverter(BaseConverter):
 app = Flask(__name__)
 app.url_map.converters["isodate"] = IsoDateConverter
 app.url_map.converters["verb"] = VerbConverter
+
+
+@app.before_request
+def _redirect_to_canonical_host() -> Response | None:
+    """301-redirect non-canonical hosts to `CANONICAL_HOST`.
+
+    No-ops when `CANONICAL_HOST` is unset (local dev). Skips `/healthz` and
+    GAE cron requests so they keep working on the appspot host.
+    """
+    canonical = os.environ.get("CANONICAL_HOST")
+    if not canonical or request.host == canonical:
+        return None
+    if request.path == "/healthz":
+        return None
+    if request.headers.get("X-Appengine-Cron") == "true":
+        return None
+    return redirect(f"https://{canonical}{request.full_path}", code=301)
 
 
 def _compute_static_hash() -> str:
