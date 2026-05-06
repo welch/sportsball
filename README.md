@@ -1,22 +1,21 @@
 # sportsball
 
-_Is my day going to be hosed by a sportsball game or a stadium concert?_
+### (aka "Is My Day @#$%#'d?")
 
-Tracks large events (>100 people) at:
+_Sportsball_ is a one-page application that speaks  to the central question
+of life in San Francisco's South Beach neighborhood:
+
+_is my day going to be hosed by a Giants or Warriors home game
+(or a Celine Dion concert at the Chase Center)?_
+
+Tracks large events at:
 
 - **Oracle Park** — SF Giants home games + concerts
 - **Chase Center** — Golden State Warriors home games + concerts
 
-Hosted at <http://sports-ball.appspot.com/>.
-
-## Status
-
-Rewrite-in-progress. The previous Python 2.7 / `webapp2` version lives at
-[`welch/sportsball-v0`](https://github.com/welch/sportsball-v0).
-
 ## Local development
 
-Requires [`uv`](https://docs.astral.sh/uv/).
+Requires [`uv`](https://docs.astral.sh/uv/) for local testing
 
 ```sh
 uv sync                       # install deps into .venv
@@ -75,6 +74,8 @@ Variables:
   requests on `localhost` aren't redirected.
 
 ## Deploy
+
+Runs on Google App Engine's free/cheap tier (Standard environment, F1 auto-scaling)
 
 ```sh
 gcloud app deploy app.yaml --project sports-ball
