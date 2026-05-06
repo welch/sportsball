@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   filter pulse (drop-shadow + brightness + contrast) that holds at peak
   for a third of the cycle. The base image stays static, so only the
   "SIGNS POINT TO YES" / "OUTLOOK NOT SO GOOD" / etc. region shimmers.
+- Footer "last updated …" timestamp now links to the GitHub repo
+  (`https://github.com/welch/sportsball`). Anchor opens in a new tab
+  (`target="_blank"` + `rel="noopener noreferrer"`) and inherits the
+  footer's grey color with no underline across all link states, so the
+  footer looks identical to before — just clickable.
 
 ## [0.3.0] - 2026-05-05
 
