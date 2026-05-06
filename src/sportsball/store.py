@@ -32,8 +32,16 @@ def _client() -> Any:
     return storage.Client()
 
 
-def write_events(events: list[Event], fetched_at: datetime) -> None:
-    """Persist events + fetched_at to the configured bucket.
+def write_events(
+    events: list[Event],
+    fetched_at: datetime,
+    previously_unseen: list[Event] | None = None,
+) -> None:
+    """Persist events + fetched_at + the cron-run delta to the configured bucket.
+
+    ``previously_unseen`` is the subset of ``events`` that didn't appear in the
+    previous cron's snapshot — what's "new" this run. Defaults to ``[]`` when
+    not supplied (e.g. for tests that don't care about the diff).
 
     No-ops (with a warning log) when ``EVENTS_BUCKET`` is unset. Lets cron
     runs in environments without storage configured silently skip the write.
@@ -45,6 +53,7 @@ def write_events(events: list[Event], fetched_at: datetime) -> None:
     payload = {
         "fetched_at": fetched_at.isoformat(),
         "events": [e.model_dump(mode="json") for e in events],
+        "previously_unseen": [e.model_dump(mode="json") for e in (previously_unseen or [])],
     }
     body = json.dumps(payload, separators=(",", ":"))
     blob = _client().bucket(bucket).blob(BLOB_NAME)
@@ -52,8 +61,12 @@ def write_events(events: list[Event], fetched_at: datetime) -> None:
     blob.upload_from_string(body, content_type="application/json")
 
 
-def read_events() -> tuple[list[Event], datetime] | None:
+def read_events() -> tuple[list[Event], datetime, list[Event]] | None:
     """Read the snapshot back, or ``None`` if it can't be loaded.
+
+    Returns ``(events, fetched_at, previously_unseen)``. The third element
+    is the events that were new in the last cron run (empty list when an
+    older blob without that field is read).
 
     Returns ``None`` for any failure mode the caller treats the same way:
     bucket env unset, blob missing, malformed payload, transient API error.
@@ -72,7 +85,14 @@ def read_events() -> tuple[list[Event], datetime] | None:
         payload = json.loads(body)
         events = [Event.model_validate(e) for e in payload["events"]]
         fetched_at = datetime.fromisoformat(payload["fetched_at"])
+        previously_unseen = [Event.model_validate(e) for e in payload.get("previously_unseen", [])]
     except Exception:
         log.exception("storage payload malformed")
         return None
-    return events, fetched_at
+    return events, fetched_at, previously_unseen
+
+
+def previously_unseen(new_events: list[Event], prev_events: list[Event]) -> list[Event]:
+    """Subset of ``new_events`` whose ``(source, source_id)`` wasn't in ``prev_events``."""
+    prev_keys = {(e.source, e.source_id) for e in prev_events}
+    return [e for e in new_events if (e.source, e.source_id) not in prev_keys]

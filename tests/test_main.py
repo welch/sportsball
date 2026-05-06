@@ -249,7 +249,9 @@ def test_refresh_requires_cron_header(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_refresh_fetches_writes_storage_and_updates_cache(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    fetched_events: list = ["e1", "e2"]
+    e1 = _ev("Mets at SF Giants", "Oracle Park", "2026-05-15T19:00:00+00:00")
+    e2 = _ev("Lakers at GS Warriors", "Chase Center", "2026-05-16T19:00:00+00:00")
+    fetched_events = [e1, e2]
     fetch_calls = {"n": 0}
 
     def fake_fetch_all(adapters: list) -> list:
@@ -258,31 +260,54 @@ def test_refresh_fetches_writes_storage_and_updates_cache(
 
     write_calls: list[tuple] = []
 
-    def fake_write(events: list, fetched_at: object) -> None:
-        write_calls.append((events, fetched_at))
+    def fake_write(events: list, fetched_at: object, **kwargs: object) -> None:
+        write_calls.append((events, fetched_at, kwargs))
 
+    # Previous cron's snapshot already had e1 — only e2 is new.
     monkeypatch.setattr(main, "fetch_all", fake_fetch_all)
     monkeypatch.setattr(main.store, "write_events", fake_write)
+    monkeypatch.setattr(main.store, "read_events", lambda: ([e1], object(), []))
     main._cache["events"] = None
     main._cache["fetched_at"] = 0.0
+    main._cache["previously_unseen"] = []
 
     response = main.app.test_client().get("/tasks/refresh", headers={"X-Appengine-Cron": "true"})
     assert response.status_code == 200
-    assert b"refreshed: 2 events" in response.data
+    assert b"refreshed: 2 events (1 new)" in response.data
     assert fetch_calls["n"] == 1
     assert len(write_calls) == 1
-    # Local cache is now populated with the fresh events.
+    _events, _fetched_at, kwargs = write_calls[0]
+    assert [e.source_id for e in kwargs["previously_unseen"]] == [e2.source_id]
     assert main._cache["events"] is fetched_events
     assert main._cache["fetched_at"] > 0.0
-    # Cleanup for downstream tests.
+    assert [e.source_id for e in main._cache["previously_unseen"]] == [e2.source_id]
     main._cache["events"] = None
     main._cache["fetched_at"] = 0.0
+    main._cache["previously_unseen"] = []
 
 
-def test_refresh_continues_when_storage_write_fails(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_refresh_first_run_marks_everything_new(monkeypatch: pytest.MonkeyPatch) -> None:
+    e1 = _ev("event 1", "Oracle Park", "2026-05-15T19:00:00+00:00")
+    monkeypatch.setattr(main, "fetch_all", lambda adapters: [e1])
+    monkeypatch.setattr(main.store, "write_events", lambda *a, **k: None)
+    # No prior snapshot exists.
+    monkeypatch.setattr(main.store, "read_events", lambda: None)
+    main._cache["events"] = None
+    main._cache["fetched_at"] = 0.0
+    main._cache["previously_unseen"] = []
+
+    response = main.app.test_client().get("/tasks/refresh", headers={"X-Appengine-Cron": "true"})
+    assert response.status_code == 200
+    assert b"refreshed: 1 events (1 new)" in response.data
+    assert [e.source_id for e in main._cache["previously_unseen"]] == [e1.source_id]
+    main._cache["events"] = None
+    main._cache["fetched_at"] = 0.0
+    main._cache["previously_unseen"] = []
+
+
+def test_refresh_continues_when_storage_write_fails(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(main, "fetch_all", lambda adapters: [])
+    monkeypatch.setattr(main.store, "read_events", lambda: None)
 
     def boom(*args: object, **kwargs: object) -> None:
         raise RuntimeError("storage unreachable")
@@ -290,6 +315,7 @@ def test_refresh_continues_when_storage_write_fails(
     monkeypatch.setattr(main.store, "write_events", boom)
     main._cache["events"] = None
     main._cache["fetched_at"] = 0.0
+    main._cache["previously_unseen"] = []
 
     response = main.app.test_client().get("/tasks/refresh", headers={"X-Appengine-Cron": "true"})
     # Storage failure shouldn't break the cron — local cache still updated.
@@ -297,6 +323,7 @@ def test_refresh_continues_when_storage_write_fails(
     assert main._cache["events"] == []
     main._cache["events"] = None
     main._cache["fetched_at"] = 0.0
+    main._cache["previously_unseen"] = []
 
 
 def test_events_reads_from_storage_on_cache_miss(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -304,17 +331,20 @@ def test_events_reads_from_storage_on_cache_miss(monkeypatch: pytest.MonkeyPatch
 
     stored_events: list = ["from-storage"]
     stored_at = _datetime(2026, 5, 6, 6, 0, tzinfo=PT)
-    monkeypatch.setattr(main.store, "read_events", lambda: (stored_events, stored_at))
-    # fetch_all should NOT be called when storage returns data.
+    stored_new: list = ["just-arrived"]
+    monkeypatch.setattr(main.store, "read_events", lambda: (stored_events, stored_at, stored_new))
     monkeypatch.setattr(main, "fetch_all", lambda adapters: pytest.fail("should not fetch"))
     main._cache["events"] = None
     main._cache["fetched_at"] = 0.0
+    main._cache["previously_unseen"] = []
 
     result = main._events()
     assert result is stored_events
     assert main._cache["fetched_at"] == stored_at.timestamp()
+    assert main._cache["previously_unseen"] == stored_new
     main._cache["events"] = None
     main._cache["fetched_at"] = 0.0
+    main._cache["previously_unseen"] = []
 
 
 def test_events_falls_back_to_adapters_when_storage_empty(
@@ -324,11 +354,14 @@ def test_events_falls_back_to_adapters_when_storage_empty(
     monkeypatch.setattr(main, "fetch_all", lambda adapters: ["from-fetch"])
     main._cache["events"] = None
     main._cache["fetched_at"] = 0.0
+    main._cache["previously_unseen"] = []
 
     result = main._events()
     assert result == ["from-fetch"]
+    assert main._cache["previously_unseen"] == []
     main._cache["events"] = None
     main._cache["fetched_at"] = 0.0
+    main._cache["previously_unseen"] = []
 
 
 def test_static_urls_carry_cache_bust_version(
@@ -509,6 +542,20 @@ def test_canonical_host_does_not_redirect_healthz(monkeypatch: pytest.MonkeyPatc
     response = main.app.test_client().get("/healthz", headers={"Host": "sports-ball.appspot.com"})
     assert response.status_code == 200
     assert response.data == b"ok"
+
+
+def test_canonical_host_does_not_redirect_localhost(
+    monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
+) -> None:
+    """Dev convenience: localhost requests skip the redirect even when
+    CANONICAL_HOST is set, so a dev whose local env.yaml carries the prod
+    canonical can still hit http://localhost:PORT without bouncing.
+    """
+    monkeypatch.setenv("CANONICAL_HOST", "example.com")
+    monkeypatch.setattr(main, "_events", lambda: [])
+    for host in ("localhost:5071", "127.0.0.1:5071", "localhost", "0.0.0.0:8080"):
+        response = main.app.test_client().get("/", headers={"Host": host})
+        assert response.status_code == 200, f"unexpected redirect for Host: {host}"
 
 
 def test_canonical_host_does_not_redirect_cron(monkeypatch: pytest.MonkeyPatch) -> None:

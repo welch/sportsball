@@ -120,5 +120,36 @@
         </tr>
       </tbody>
     </table>
+
+    <h2>New since previous cron ({{ new_events|length }})</h2>
+    {% if new_events %}
+      <table>
+        <thead>
+          <tr>
+            <th>Date (PT)</th>
+            <th>Time</th>
+            <th>Venue</th>
+            <th>Category</th>
+            <th>Name</th>
+            <th class="adapter-name">Source</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for e in new_events %}
+            {% set local = e.starts_at.astimezone(pt) %}
+            <tr>
+              <td><time datetime="{{ local.isoformat() }}">{{ local.strftime('%a %b %-d, %Y') }}</time></td>
+              <td>{{ local.strftime('%-I:%M %p') }}</td>
+              <td>{{ e.venue }}</td>
+              <td>{{ e.category }}</td>
+              <td>{{ e.name }}</td>
+              <td class="adapter-name muted">{{ e.source }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="muted">No new events in the last cron run — the snapshot is unchanged from the previous one.</p>
+    {% endif %}
   </body>
 </html>

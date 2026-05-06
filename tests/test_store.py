@@ -53,9 +53,41 @@ def test_write_serializes_via_pydantic_and_uploads(monkeypatch: pytest.MonkeyPat
     assert payload["events"][0]["source_id"] == "1"
 
 
-def test_read_round_trips(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_read_round_trips_with_diff(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("EVENTS_BUCKET", "test-bucket")
     events = [_ev("1"), _ev("2", venue="Chase Center")]
+    new_only = [_ev("2", venue="Chase Center")]
+    fetched_at = datetime(2026, 5, 6, 6, 0, tzinfo=PT)
+    payload = json.dumps(
+        {
+            "fetched_at": fetched_at.isoformat(),
+            "events": [e.model_dump(mode="json") for e in events],
+            "previously_unseen": [e.model_dump(mode="json") for e in new_only],
+        }
+    ).encode()
+
+    fake_blob = MagicMock()
+    fake_blob.download_as_bytes.return_value = payload
+    fake_bucket = MagicMock()
+    fake_bucket.blob.return_value = fake_blob
+    fake_client = MagicMock()
+    fake_client.bucket.return_value = fake_bucket
+    monkeypatch.setattr(store, "_client", lambda: fake_client)
+
+    result = store.read_events()
+    assert result is not None
+    got_events, got_fetched_at, got_new = result
+    assert {e.source_id for e in got_events} == {"1", "2"}
+    assert got_fetched_at == fetched_at
+    assert [e.source_id for e in got_new] == ["2"]
+
+
+def test_read_handles_legacy_blob_without_diff_field(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Old blobs (written before this field existed) → previously_unseen=[]."""
+    monkeypatch.setenv("EVENTS_BUCKET", "test-bucket")
+    events = [_ev("1")]
     fetched_at = datetime(2026, 5, 6, 6, 0, tzinfo=PT)
     payload = json.dumps(
         {
@@ -74,9 +106,21 @@ def test_read_round_trips(monkeypatch: pytest.MonkeyPatch) -> None:
 
     result = store.read_events()
     assert result is not None
-    got_events, got_fetched_at = result
-    assert {e.source_id for e in got_events} == {"1", "2"}
-    assert got_fetched_at == fetched_at
+    _events, _fetched, got_new = result
+    assert got_new == []
+
+
+def test_previously_unseen_diffs_by_source_and_id() -> None:
+    prev = [_ev("1"), _ev("2", venue="Chase Center")]
+    new = [_ev("2", venue="Chase Center"), _ev("3")]
+    diff = store.previously_unseen(new, prev)
+    assert [e.source_id for e in diff] == ["3"]
+
+
+def test_previously_unseen_first_run_returns_all() -> None:
+    new = [_ev("1"), _ev("2")]
+    diff = store.previously_unseen(new, [])
+    assert {e.source_id for e in diff} == {"1", "2"}
 
 
 def test_read_returns_none_on_blob_error(monkeypatch: pytest.MonkeyPatch) -> None:

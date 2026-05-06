@@ -62,15 +62,24 @@ app.url_map.converters["verb"] = VerbConverter
 log = logging.getLogger(__name__)
 
 
+_LOCAL_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0"}
+
+
 @app.before_request
 def _redirect_to_canonical_host() -> Response | None:
     """301-redirect non-canonical hosts to `CANONICAL_HOST`.
 
-    No-ops when `CANONICAL_HOST` is unset (local dev). Skips `/healthz` and
-    GAE cron requests so they keep working on the appspot host.
+    No-ops when `CANONICAL_HOST` is unset (local dev). Also skips when the
+    request is to a localhost address — so a developer with the production
+    canonical configured in their local `env.yaml` can still hit
+    `http://localhost:5000` without bouncing to the production domain.
+    Skips `/healthz` and GAE cron requests so they keep working on the
+    appspot host.
     """
     canonical = os.environ.get("CANONICAL_HOST")
     if not canonical or request.host == canonical:
+        return None
+    if request.host.split(":", 1)[0] in _LOCAL_HOSTS:
         return None
     if request.path == "/healthz":
         return None
@@ -130,7 +139,7 @@ def team_colorize(text: str) -> Markup:
 
 
 _cache_lock = threading.Lock()
-_cache: dict[str, Any] = {"events": None, "fetched_at": 0.0}
+_cache: dict[str, Any] = {"events": None, "fetched_at": 0.0, "previously_unseen": []}
 
 
 ADAPTER_NAMES: tuple[str, ...] = (
@@ -163,12 +172,14 @@ def _events() -> list[Event]:
         if stale:
             stored = store.read_events()
             if stored is not None:
-                events, fetched_at = stored
+                events, fetched_at, prev_unseen = stored
                 _cache["events"] = events
                 _cache["fetched_at"] = fetched_at.timestamp()
+                _cache["previously_unseen"] = prev_unseen
             else:
                 _cache["events"] = fetch_all(_adapters())
                 _cache["fetched_at"] = time.time()
+                _cache["previously_unseen"] = []
         return _cache["events"]
 
 
@@ -313,15 +324,18 @@ def health(token: str) -> str:
     if cache_fetched_at is not None:
         cache_age_label = _humanize_age((now - cache_fetched_at).total_seconds())
     cached_events = _cache["events"] or []
+    new_events = sorted(_cache["previously_unseen"] or [], key=lambda e: e.starts_at)
     return render_template(
         "health.html",
         now=now,
         adapters=stats.adapter_stats(ADAPTER_NAMES),
         request_summary=stats.request_summary(),
         cache_event_count=len(cached_events),
+        new_events=new_events,
         cache_fetched_at=cache_fetched_at,
         cache_age_label=cache_age_label,
         humanize_age=_humanize_age,
+        pt=PT,
     )
 
 
@@ -340,11 +354,17 @@ def refresh() -> tuple[str, int]:
         abort(403)
     events = fetch_all(_adapters())
     fetched_at = datetime.now(tz=PT)
+    # Compare against the previous cron's snapshot to compute the delta.
+    # First-ever run has no prior, so everything counts as previously unseen.
+    prior = store.read_events()
+    prev_events = prior[0] if prior is not None else []
+    prev_unseen = store.previously_unseen(events, prev_events)
     try:
-        store.write_events(events, fetched_at)
+        store.write_events(events, fetched_at, previously_unseen=prev_unseen)
     except Exception:
         log.exception("storage write failed; cron continued with local cache only")
     with _cache_lock:
         _cache["events"] = events
         _cache["fetched_at"] = fetched_at.timestamp()
-    return f"refreshed: {len(events)} events\n", 200
+        _cache["previously_unseen"] = prev_unseen
+    return f"refreshed: {len(events)} events ({len(prev_unseen)} new)\n", 200

@@ -30,6 +30,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `tests/conftest.py` now clears env-driven configuration (`VERB`,
   `CANONICAL_HOST`, `HEALTH_TOKEN`, `EVENTS_BUCKET`) before each test
   so the suite is hermetic regardless of the developer's local `env.yaml`.
+- Cron now persists not just `(events, fetched_at)` but also
+  `previously_unseen` — the events whose `(source, source_id)` wasn't
+  in the prior cron's snapshot. The health page renders that list as a
+  "New since previous cron" table so you can see exactly what each cron
+  brought in. First-ever run flags everything as new (no prior to diff
+  against).
+- Canonical-host redirect now skips requests whose `Host` is `localhost`,
+  `127.0.0.1`, or `0.0.0.0`, so a developer with the production
+  `CANONICAL_HOST` in their local `env.yaml` can still hit
+  `http://localhost:PORT` without being bounced to production.
 
 ## [0.4.0] - 2026-05-06
 
