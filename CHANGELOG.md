@@ -36,6 +36,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   "New since previous cron" table so you can see exactly what each cron
   brought in. First-ever run flags everything as new (no prior to diff
   against).
+
+### Fixed
+
+- Per-adapter stats (last success / last failure / event count) now
+  survive instance lifecycle. Cron persists a `snapshot_adapter_stats()`
+  alongside the events blob; the storage-read path calls
+  `stats.load_adapter_stats(...)` so any serving instance reflects the
+  cron's view of adapter health. Without this the health page on a
+  fresh-after-scale-to-zero instance showed every adapter as "never
+  ran" — accurate-but-misleading because the cron *had* run, just on
+  an instance that no longer existed. The HTTP-request rolling deque
+  remains per-instance.
 - Canonical-host redirect now skips requests whose `Host` is `localhost`,
   `127.0.0.1`, or `0.0.0.0`, so a developer with the production
   `CANONICAL_HOST` in their local `env.yaml` can still hit

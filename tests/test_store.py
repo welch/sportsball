@@ -76,16 +76,55 @@ def test_read_round_trips_with_diff(monkeypatch: pytest.MonkeyPatch) -> None:
 
     result = store.read_events()
     assert result is not None
-    got_events, got_fetched_at, got_new = result
+    got_events, got_fetched_at, got_new, got_stats = result
     assert {e.source_id for e in got_events} == {"1", "2"}
     assert got_fetched_at == fetched_at
     assert [e.source_id for e in got_new] == ["2"]
+    assert got_stats == []
+
+
+def test_read_carries_adapter_stats(monkeypatch: pytest.MonkeyPatch) -> None:
+    from sportsball.stats import AdapterStats
+
+    monkeypatch.setenv("EVENTS_BUCKET", "test-bucket")
+    fetched_at = datetime(2026, 5, 7, 6, 0, tzinfo=PT)
+    stats_in = [
+        AdapterStats(name="giants.fetch_events", last_success_at=fetched_at, last_event_count=42),
+        AdapterStats(
+            name="warriors.fetch_events",
+            last_failure_at=fetched_at,
+            last_error="upstream 503",
+        ),
+    ]
+    payload = json.dumps(
+        {
+            "fetched_at": fetched_at.isoformat(),
+            "events": [],
+            "previously_unseen": [],
+            "adapter_stats": [s.model_dump(mode="json") for s in stats_in],
+        }
+    ).encode()
+
+    fake_blob = MagicMock()
+    fake_blob.download_as_bytes.return_value = payload
+    fake_bucket = MagicMock()
+    fake_bucket.blob.return_value = fake_blob
+    fake_client = MagicMock()
+    fake_client.bucket.return_value = fake_bucket
+    monkeypatch.setattr(store, "_client", lambda: fake_client)
+
+    result = store.read_events()
+    assert result is not None
+    _events, _fetched, _new, got_stats = result
+    by_name = {s.name: s for s in got_stats}
+    assert by_name["giants.fetch_events"].last_event_count == 42
+    assert by_name["warriors.fetch_events"].last_error == "upstream 503"
 
 
 def test_read_handles_legacy_blob_without_diff_field(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Old blobs (written before this field existed) → previously_unseen=[]."""
+    """Old blobs → previously_unseen=[] and adapter_stats=[]."""
     monkeypatch.setenv("EVENTS_BUCKET", "test-bucket")
     events = [_ev("1")]
     fetched_at = datetime(2026, 5, 6, 6, 0, tzinfo=PT)
@@ -106,8 +145,9 @@ def test_read_handles_legacy_blob_without_diff_field(
 
     result = store.read_events()
     assert result is not None
-    _events, _fetched, got_new = result
+    _events, _fetched, got_new, got_stats = result
     assert got_new == []
+    assert got_stats == []
 
 
 def test_previously_unseen_diffs_by_source_and_id() -> None:

@@ -14,6 +14,7 @@ from datetime import datetime
 from typing import Any
 
 from sportsball.models import Event
+from sportsball.stats import AdapterStats
 
 BLOB_NAME = "events.json"
 
@@ -36,12 +37,15 @@ def write_events(
     events: list[Event],
     fetched_at: datetime,
     previously_unseen: list[Event] | None = None,
+    adapter_stats: list[AdapterStats] | None = None,
 ) -> None:
-    """Persist events + fetched_at + the cron-run delta to the configured bucket.
+    """Persist the cron's full snapshot to the configured bucket.
 
-    ``previously_unseen`` is the subset of ``events`` that didn't appear in the
-    previous cron's snapshot — what's "new" this run. Defaults to ``[]`` when
-    not supplied (e.g. for tests that don't care about the diff).
+    ``previously_unseen`` is the subset of ``events`` that didn't appear in
+    the previous cron's snapshot — what's "new" this run. ``adapter_stats``
+    is the cron's per-adapter outcome summary; persisting it lets a future
+    serving instance show the cron's view of adapter health on the health
+    page even after that cron's instance has been scaled to zero.
 
     No-ops (with a warning log) when ``EVENTS_BUCKET`` is unset. Lets cron
     runs in environments without storage configured silently skip the write.
@@ -54,6 +58,7 @@ def write_events(
         "fetched_at": fetched_at.isoformat(),
         "events": [e.model_dump(mode="json") for e in events],
         "previously_unseen": [e.model_dump(mode="json") for e in (previously_unseen or [])],
+        "adapter_stats": [s.model_dump(mode="json") for s in (adapter_stats or [])],
     }
     body = json.dumps(payload, separators=(",", ":"))
     blob = _client().bucket(bucket).blob(BLOB_NAME)
@@ -61,12 +66,12 @@ def write_events(
     blob.upload_from_string(body, content_type="application/json")
 
 
-def read_events() -> tuple[list[Event], datetime, list[Event]] | None:
+def read_events() -> tuple[list[Event], datetime, list[Event], list[AdapterStats]] | None:
     """Read the snapshot back, or ``None`` if it can't be loaded.
 
-    Returns ``(events, fetched_at, previously_unseen)``. The third element
-    is the events that were new in the last cron run (empty list when an
-    older blob without that field is read).
+    Returns ``(events, fetched_at, previously_unseen, adapter_stats)``. The
+    final two elements default to ``[]`` when reading an older blob written
+    before they existed.
 
     Returns ``None`` for any failure mode the caller treats the same way:
     bucket env unset, blob missing, malformed payload, transient API error.
@@ -86,10 +91,11 @@ def read_events() -> tuple[list[Event], datetime, list[Event]] | None:
         events = [Event.model_validate(e) for e in payload["events"]]
         fetched_at = datetime.fromisoformat(payload["fetched_at"])
         previously_unseen = [Event.model_validate(e) for e in payload.get("previously_unseen", [])]
+        adapter_stats = [AdapterStats.model_validate(s) for s in payload.get("adapter_stats", [])]
     except Exception:
         log.exception("storage payload malformed")
         return None
-    return events, fetched_at, previously_unseen
+    return events, fetched_at, previously_unseen, adapter_stats
 
 
 def previously_unseen(new_events: list[Event], prev_events: list[Event]) -> list[Event]:

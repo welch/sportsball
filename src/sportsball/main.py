@@ -172,10 +172,12 @@ def _events() -> list[Event]:
         if stale:
             stored = store.read_events()
             if stored is not None:
-                events, fetched_at, prev_unseen = stored
+                events, fetched_at, prev_unseen, adapter_snapshot = stored
                 _cache["events"] = events
                 _cache["fetched_at"] = fetched_at.timestamp()
                 _cache["previously_unseen"] = prev_unseen
+                if adapter_snapshot:
+                    stats.load_adapter_stats(adapter_snapshot)
             else:
                 _cache["events"] = fetch_all(_adapters())
                 _cache["fetched_at"] = time.time()
@@ -359,8 +361,17 @@ def refresh() -> tuple[str, int]:
     prior = store.read_events()
     prev_events = prior[0] if prior is not None else []
     prev_unseen = store.previously_unseen(events, prev_events)
+    # Snapshot per-adapter outcomes so a future serving instance (which will
+    # only ever read the storage blob, never run adapters itself) can render
+    # the cron's view of adapter health on /health/<token>.
+    adapter_snapshot = stats.snapshot_adapter_stats()
     try:
-        store.write_events(events, fetched_at, previously_unseen=prev_unseen)
+        store.write_events(
+            events,
+            fetched_at,
+            previously_unseen=prev_unseen,
+            adapter_stats=adapter_snapshot,
+        )
     except Exception:
         log.exception("storage write failed; cron continued with local cache only")
     with _cache_lock:

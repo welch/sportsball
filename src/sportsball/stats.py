@@ -120,6 +120,29 @@ def _prune_locked(now: datetime) -> None:
         _requests.popleft()
 
 
+def snapshot_adapter_stats() -> list[AdapterStats]:
+    """Return a copy of every recorded `AdapterStats` for persistence.
+
+    Pairs with `load_adapter_stats` so the cron-run snapshot can travel
+    through Cloud Storage and be re-instated on a fresh instance.
+    """
+    with _lock:
+        return [s.model_copy() for s in _adapters.values()]
+
+
+def load_adapter_stats(snapshot: list[AdapterStats]) -> None:
+    """Replace recorded adapter stats with `snapshot`.
+
+    The HTTP-request rolling deque is intentionally **not** touched —
+    that's per-instance traffic data and shouldn't be borrowed from a
+    different process.
+    """
+    with _lock:
+        _adapters.clear()
+        for s in snapshot:
+            _adapters[s.name] = s.model_copy()
+
+
 def reset() -> None:
     """Clear all recorded state. Test-only helper."""
     with _lock:

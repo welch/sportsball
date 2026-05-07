@@ -266,7 +266,7 @@ def test_refresh_fetches_writes_storage_and_updates_cache(
     # Previous cron's snapshot already had e1 — only e2 is new.
     monkeypatch.setattr(main, "fetch_all", fake_fetch_all)
     monkeypatch.setattr(main.store, "write_events", fake_write)
-    monkeypatch.setattr(main.store, "read_events", lambda: ([e1], object(), []))
+    monkeypatch.setattr(main.store, "read_events", lambda: ([e1], object(), [], []))
     main._cache["events"] = None
     main._cache["fetched_at"] = 0.0
     main._cache["previously_unseen"] = []
@@ -332,7 +332,9 @@ def test_events_reads_from_storage_on_cache_miss(monkeypatch: pytest.MonkeyPatch
     stored_events: list = ["from-storage"]
     stored_at = _datetime(2026, 5, 6, 6, 0, tzinfo=PT)
     stored_new: list = ["just-arrived"]
-    monkeypatch.setattr(main.store, "read_events", lambda: (stored_events, stored_at, stored_new))
+    monkeypatch.setattr(
+        main.store, "read_events", lambda: (stored_events, stored_at, stored_new, [])
+    )
     monkeypatch.setattr(main, "fetch_all", lambda adapters: pytest.fail("should not fetch"))
     main._cache["events"] = None
     main._cache["fetched_at"] = 0.0

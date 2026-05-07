@@ -78,3 +78,29 @@ def test_adapter_stats_preserves_requested_order() -> None:
     stats.record_adapter_success("a", 2)
     snaps = stats.adapter_stats(["a", "b", "c"])
     assert [s.name for s in snaps] == ["a", "b", "c"]
+
+
+def test_snapshot_and_load_round_trip() -> None:
+    stats.record_adapter_success("giants.fetch_events", 50)
+    stats.record_adapter_failure("warriors.fetch_events", "boom")
+    snapshot = stats.snapshot_adapter_stats()
+
+    # Simulate a fresh process by clearing in-memory state, then loading.
+    stats.reset()
+    assert stats.adapter_stats(["giants.fetch_events"])[0].last_success_at is None
+
+    stats.load_adapter_stats(snapshot)
+    [g, w] = stats.adapter_stats(["giants.fetch_events", "warriors.fetch_events"])
+    assert g.last_event_count == 50
+    assert g.last_success_at is not None
+    assert w.last_error == "boom"
+    assert w.last_failure_at is not None
+
+
+def test_load_adapter_stats_does_not_clear_request_window() -> None:
+    """Per-process traffic data must survive when adapter snapshot is loaded
+    from a remote-cron's state."""
+    stats.record_request(200)
+    snap = [stats.AdapterStats(name="giants.fetch_events", last_event_count=10)]
+    stats.load_adapter_stats(snap)
+    assert stats.request_summary().total == 1
