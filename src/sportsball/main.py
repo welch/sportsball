@@ -342,6 +342,14 @@ def health(token: str) -> str:
     expected = os.environ.get("HEALTH_TOKEN")
     if not expected or token != expected:
         abort(404)
+    # On a truly-fresh instance (no previous request has populated the
+    # cache yet), trigger the storage load so the adapter snapshot from
+    # the latest cron is loaded into stats. Without this, a fresh
+    # instance whose first hit is /health would show every adapter as
+    # "never". Skip when the cache already has entries — even an empty
+    # list signals "we've loaded already, just no events."
+    if _cache["events"] is None:
+        _events()
     now = datetime.now(tz=PT)
     cache_fetched_ts = _cache["fetched_at"] or 0.0
     cache_fetched_at = datetime.fromtimestamp(cache_fetched_ts, tz=PT) if cache_fetched_ts else None

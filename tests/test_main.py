@@ -599,6 +599,42 @@ def test_format_version_falls_back_on_unparseable(monkeypatch: pytest.MonkeyPatc
     assert main._format_version() == "manual-deploy"
 
 
+def test_health_loads_adapter_stats_from_storage_on_fresh_instance(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Bug fix: a fresh instance whose first request is /health used to show
+    every adapter as "never" because /health read _cache directly without
+    triggering the storage load. Verify the storage adapter_stats land
+    on the page even when the cache starts empty.
+    """
+    from datetime import datetime as _dt
+
+    from sportsball.stats import AdapterStats
+
+    monkeypatch.setenv("HEALTH_TOKEN", "secret")
+    fetched_at = _dt(2026, 5, 8, 6, 0, tzinfo=PT)
+    snapshot = [
+        AdapterStats(
+            name="giants.fetch_events",
+            last_success_at=fetched_at,
+            last_event_count=42,
+        )
+    ]
+    monkeypatch.setattr(main.store, "read_events", lambda: ([], fetched_at, [], snapshot))
+    main._cache["events"] = None
+    main._cache["fetched_at"] = 0.0
+    main._cache["previously_unseen"] = []
+
+    response = main.app.test_client().get("/health/secret")
+    assert response.status_code == 200
+    body = response.data.decode()
+    assert "giants.fetch_events" in body
+    assert "42" in body
+    main._cache["events"] = None
+    main._cache["fetched_at"] = 0.0
+    main._cache["previously_unseen"] = []
+
+
 def test_health_page_renders_version_label(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("HEALTH_TOKEN", "secret")
     monkeypatch.setenv("GAE_VERSION", "v0-4-0-dc9473a")
