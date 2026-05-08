@@ -16,13 +16,11 @@ cd "$(dirname "$0")/.."
 
 TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo v0)
 SHA=$(git rev-parse --short HEAD)
-if git status --porcelain | grep -q .; then
-    DIRTY=dirty
-else
-    DIRTY=clean
-fi
 SAFE_TAG=$(echo "$TAG" | tr '.' '-')
-ID="${SAFE_TAG}-${SHA}-${DIRTY}"
+ID="${SAFE_TAG}-${SHA}"
+if git status --porcelain | grep -q .; then
+    ID="${ID}-dirty"
+fi
 
 echo "Deploying as version: ${ID}"
 exec gcloud app deploy app.yaml --version="$ID" "$@"

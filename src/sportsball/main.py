@@ -266,8 +266,9 @@ def _format_version() -> str:
     """Pretty-print the current GAE version ID for the health page.
 
     `bin/deploy` encodes git state into the version ID as
-    `<tag>-<sha>-<clean|dirty>` (with dots in the tag mangled to hyphens).
-    Convert back to a readable form like `v0.4.0+dc9473a (dirty)`. If the
+    `<tag>-<sha>` for clean trees and `<tag>-<sha>-dirty` for dirty ones,
+    with dots in the tag mangled to hyphens. Convert back to a readable
+    form like `v0.4.0+dc9473a` (or with " (dirty)" appended). If the
     instance was deployed without `bin/deploy` (timestamp-style ID) or
     we're in local dev (env var unset), fall back gracefully.
     """
@@ -275,13 +276,21 @@ def _format_version() -> str:
     if not raw:
         return "(local — GAE_VERSION not set)"
     parts = raw.split("-")
-    if len(parts) >= 3 and parts[-1] in {"clean", "dirty"}:
+    if len(parts) >= 3 and parts[-1] == "dirty":
         tag = ".".join(parts[:-2])
         sha = parts[-2]
-        suffix = " (dirty)" if parts[-1] == "dirty" else ""
-        return f"{tag}+{sha}{suffix}"
+        return f"{tag}+{sha} (dirty)"
+    if len(parts) >= 2 and _looks_like_short_sha(parts[-1]):
+        tag = ".".join(parts[:-1])
+        sha = parts[-1]
+        return f"{tag}+{sha}"
     # Auto-generated timestamp ID — return raw so the operator sees it.
     return raw
+
+
+def _looks_like_short_sha(s: str) -> bool:
+    """Lower-hex string between 6 and 12 chars (typical short-SHA range)."""
+    return 6 <= len(s) <= 12 and all(c in "0123456789abcdef" for c in s)
 
 
 def _humanize_age(seconds: float) -> str:

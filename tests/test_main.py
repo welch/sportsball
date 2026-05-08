@@ -573,8 +573,11 @@ def test_format_version_unset_env() -> None:
     assert "local" in main._format_version().lower()
 
 
-def test_format_version_pretty_prints_bin_deploy_id(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("GAE_VERSION", "v0-4-0-dc9473a-clean")
+def test_format_version_pretty_prints_clean_bin_deploy_id(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Clean trees → no `-clean` suffix; just <tag>-<sha>."""
+    monkeypatch.setenv("GAE_VERSION", "v0-4-0-dc9473a")
     assert main._format_version() == "v0.4.0+dc9473a"
 
 
@@ -590,9 +593,15 @@ def test_format_version_falls_back_on_timestamp_id(monkeypatch: pytest.MonkeyPat
     assert main._format_version() == "20260507t170000"
 
 
+def test_format_version_falls_back_on_unparseable(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Anything that doesn't end in a short-SHA-shaped trailing part shows raw."""
+    monkeypatch.setenv("GAE_VERSION", "manual-deploy")
+    assert main._format_version() == "manual-deploy"
+
+
 def test_health_page_renders_version_label(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("HEALTH_TOKEN", "secret")
-    monkeypatch.setenv("GAE_VERSION", "v0-4-0-dc9473a-clean")
+    monkeypatch.setenv("GAE_VERSION", "v0-4-0-dc9473a")
     response = main.app.test_client().get("/health/secret")
     assert response.status_code == 200
     assert b"v0.4.0+dc9473a" in response.data
