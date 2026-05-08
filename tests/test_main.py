@@ -15,6 +15,19 @@ def _reset_stats() -> None:
     stats.reset()
 
 
+@pytest.fixture(autouse=True)
+def _stub_cloud_logging_query(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Tests hitting `/health/<token>` would otherwise reach Cloud Logging
+    via `stats.request_summary()`. Stub at the function level so the health
+    page renders an empty summary by default.
+    """
+    monkeypatch.setattr(
+        stats,
+        "_query_request_summary",
+        lambda window_hours=24: stats.RequestSummary(window_hours=window_hours),
+    )
+
+
 @pytest.fixture
 def fixed_now(monkeypatch: pytest.MonkeyPatch) -> datetime:
     now = datetime(2026, 5, 4, 12, 0, tzinfo=PT)
@@ -206,7 +219,7 @@ def test_index_shows_last_updated_footer(
     main._cache["fetched_at"] = 0.0
 
 
-def test_index_footer_links_to_github_repo(
+def test_index_footer_links_to_about_page(
     monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
 ) -> None:
     import time as _time
@@ -216,14 +229,24 @@ def test_index_footer_links_to_github_repo(
     monkeypatch.setattr(main, "_events", lambda: [])
     response = main.app.test_client().get("/")
     body = response.data
-    # Anchor wrapping the footer text, opening in a new tab with safe rel.
-    assert b'href="https://github.com/welch/sportsball"' in body
-    assert b'target="_blank"' in body
-    assert b'rel="noopener noreferrer"' in body
-    # The anchor wraps the existing footer text, not a separate node.
-    assert b'sportsball" target="_blank" rel="noopener noreferrer">last updated ' in body
+    # Anchor target is now the in-app /about page, not the GitHub repo.
+    assert b'href="/about"' in body
+    # Anchor wraps the footer text, not a separate node.
+    assert b'href="/about">last updated ' in body
+    # External-link attributes from the previous version are gone.
+    assert b"github.com/welch/sportsball" not in body
+    assert b'target="_blank"' not in body
     main._cache["events"] = None
     main._cache["fetched_at"] = 0.0
+
+
+def test_about_page_has_repo_link_and_back_link() -> None:
+    response = main.app.test_client().get("/about")
+    assert response.status_code == 200
+    body = response.data
+    assert b"github.com/welch/sportsball" in body
+    # Back to today
+    assert b'href="/"' in body
 
 
 def test_footer_link_inherits_styling_in_served_css() -> None:
@@ -546,6 +569,35 @@ def test_canonical_host_does_not_redirect_healthz(monkeypatch: pytest.MonkeyPatc
     assert response.data == b"ok"
 
 
+def test_format_version_unset_env() -> None:
+    assert "local" in main._format_version().lower()
+
+
+def test_format_version_pretty_prints_bin_deploy_id(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GAE_VERSION", "v0-4-0-dc9473a-clean")
+    assert main._format_version() == "v0.4.0+dc9473a"
+
+
+def test_format_version_marks_dirty(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GAE_VERSION", "v0-4-0-dc9473a-dirty")
+    assert main._format_version() == "v0.4.0+dc9473a (dirty)"
+
+
+def test_format_version_falls_back_on_timestamp_id(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Bare `gcloud app deploy` (no bin/deploy) gives a timestamp-shaped ID
+    that can't be parsed; show it raw so the operator notices."""
+    monkeypatch.setenv("GAE_VERSION", "20260507t170000")
+    assert main._format_version() == "20260507t170000"
+
+
+def test_health_page_renders_version_label(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("HEALTH_TOKEN", "secret")
+    monkeypatch.setenv("GAE_VERSION", "v0-4-0-dc9473a-clean")
+    response = main.app.test_client().get("/health/secret")
+    assert response.status_code == 200
+    assert b"v0.4.0+dc9473a" in response.data
+
+
 def test_canonical_host_does_not_redirect_localhost(
     monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
 ) -> None:
@@ -644,26 +696,6 @@ def test_health_right_token_renders_status(monkeypatch: pytest.MonkeyPatch) -> N
     assert "Adapters" in body
     assert "HTTP requests" in body
     assert "Event cache" in body
-
-
-def test_health_endpoint_does_not_count_itself(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("HEALTH_TOKEN", "secret")
-    main.app.test_client().get("/health/secret")
-    main.app.test_client().get("/health/wrong")  # also a /health/ path → skipped
-    assert stats.request_summary().total == 0
-
-
-def test_request_hook_records_other_routes(
-    monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
-) -> None:
-    monkeypatch.setattr(main, "_events", lambda: [])
-    main.app.test_client().get("/")
-    main.app.test_client().get("/healthz")
-    main.app.test_client().get("/2026-13-32")  # 404
-    summary = stats.request_summary()
-    assert summary.total == 3
-    assert summary.by_class["2xx"] == 2
-    assert summary.by_class["4xx"] == 1
 
 
 def test_health_records_per_adapter_via_fetch_all(monkeypatch: pytest.MonkeyPatch) -> None:

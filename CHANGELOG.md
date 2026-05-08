@@ -37,6 +37,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   brought in. First-ever run flags everything as new (no prior to diff
   against).
 
+### Added
+
+- `/about` page — plain-language explanation of the site for casual
+  visitors. The "last updated" footer link in the page footer now points
+  here instead of straight at the GitHub repo. The repo link lives at
+  the bottom of `/about` for anyone who wants the code.
+- "Page views" tile on the health page — a separate count of 2xx
+  responses in the last 24h, distinct from the all-status total. Most
+  3xx hits are unfollowed canonical-host redirects from legacy-URL bot
+  probes, and most 4xx hits are vulnerability scanners. The 2xx-only
+  number is the real "humans loaded my page" metric.
+- `bin/deploy` — wrapper around `gcloud app deploy app.yaml` that
+  encodes the current git state (`<tag>-<sha>-<clean|dirty>`) into the
+  GAE version ID. The deployed app reads `$GAE_VERSION` (auto-set by GAE)
+  and renders it on the health page, so "what's actually running" is
+  visible at a glance. Bare `gcloud app deploy` still works; the
+  timestamp-shaped ID it produces is shown raw, which itself signals
+  "this wasn't deployed via bin/deploy."
+
 ### Fixed
 
 - Per-adapter stats (last success / last failure / event count) now
@@ -46,8 +65,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cron's view of adapter health. Without this the health page on a
   fresh-after-scale-to-zero instance showed every adapter as "never
   ran" — accurate-but-misleading because the cron *had* run, just on
-  an instance that no longer existed. The HTTP-request rolling deque
-  remains per-instance.
+  an instance that no longer existed.
+- HTTP-request counts on the health page are now queried from Cloud
+  Logging (with a 5-minute in-process cache) rather than tracked in an
+  in-process deque. The deque was per-instance and reset to zero every
+  time GAE scaled to zero, which made the count non-monotonic and
+  effectively useless. Cloud Logging is GAE's existing log stream — no
+  new infrastructure to manage. The query filter excludes `/health/`,
+  `/healthz`, and `/tasks/refresh` so operator polling, GAE health
+  probes, and cron invocations don't inflate the user-traffic count.
+  Adds a `roles/logging.viewer` IAM grant requirement for the App Engine
+  default service account; documented in the README setup section.
 - Canonical-host redirect now skips requests whose `Host` is `localhost`,
   `127.0.0.1`, or `0.0.0.0`, so a developer with the production
   `CANONICAL_HOST` in their local `env.yaml` can still hit

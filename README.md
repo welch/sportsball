@@ -123,15 +123,19 @@ gcloud services enable \
   cloudscheduler.googleapis.com \
   --project=$PROJECT
 
-# IAM: let the App Engine default service account run Cloud Build and write
-# to the default storage bucket. Modern projects auto-grant these; older
-# ones don't.
+# IAM: let the App Engine default service account run Cloud Build, write
+# to the default storage bucket, and read its own request logs (so the
+# health page can render real 24h HTTP traffic stats). Modern projects
+# auto-grant the first two; older ones don't.
 gcloud projects add-iam-policy-binding $PROJECT \
   --member=serviceAccount:$SA \
   --role=roles/cloudbuild.builds.builder
 gcloud storage buckets add-iam-policy-binding gs://$PROJECT.appspot.com \
   --member=serviceAccount:$SA \
   --role=roles/storage.objectAdmin
+gcloud projects add-iam-policy-binding $PROJECT \
+  --member=serviceAccount:$SA \
+  --role=roles/logging.viewer
 ```
 
 If you want a custom domain, see
@@ -140,9 +144,18 @@ If you want a custom domain, see
 ### Deploy
 
 ```sh
-gcloud app deploy app.yaml --project=<your-project-id>
+bin/deploy --project=<your-project-id>           # deploys app.yaml
 gcloud app deploy cron.yaml --project=<your-project-id>
 ```
+
+`bin/deploy` is a thin wrapper around `gcloud app deploy app.yaml` that
+encodes the current git state (tag, short SHA, clean/dirty) into the
+GAE version ID. The runtime then reads `$GAE_VERSION` and shows it on
+the health page, so "what's actually running" is one click away.
+
+A bare `gcloud app deploy app.yaml` still works but assigns a timestamp
+version ID — health page will display that raw, which is itself a clear
+"this wasn't deployed via bin/deploy" signal.
 
 `cron.yaml` runs `/tasks/refresh` daily at 06:00 PT, which fetches all four
 sources and writes a fresh snapshot to `EVENTS_BUCKET`. The endpoint is

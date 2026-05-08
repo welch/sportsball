@@ -24,11 +24,13 @@
       .muted { color: #888; }
       .err-msg { font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
                  font-size: .85em; white-space: pre-wrap; word-break: break-word; }
+      .page-views { font-size: 1.05em; margin: .75em 0 .25em; color: #2a7a2a; }
     </style>
   </head>
   <body>
     <h1>sportsball health</h1>
-    <p class="meta">as of <time datetime="{{ now.isoformat() }}">{{ now.strftime('%a %b %-d, %-I:%M:%S %p %Z') }}</time></p>
+    <p class="meta">as of <time datetime="{{ now.isoformat() }}">{{ now.strftime('%a %b %-d, %-I:%M:%S %p %Z') }}</time>
+       · running <code>{{ version_label }}</code></p>
 
     <h2>Adapters</h2>
     <table>
@@ -69,27 +71,36 @@
       </tbody>
     </table>
 
-    <h2>HTTP requests (last 24h)</h2>
-    <table>
-      <thead>
-        <tr>
-          <th>Class</th>
-          <th class="num">Count</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td><strong>Total</strong></td>
-          <td class="num"><strong>{{ request_summary.total }}</strong></td>
-        </tr>
-        {% for cls in ["2xx", "3xx", "4xx", "5xx"] %}
+    <h2>HTTP requests (last {{ request_summary.window_hours }}h)</h2>
+    {% if request_summary.source == "unavailable" %}
+      <p class="muted">Cloud Logging query failed — see server logs. The
+        traffic count won't render until the next successful query.</p>
+    {% else %}
+      <p class="page-views"><strong>{{ request_summary.user_traffic }}</strong>
+        page views (2xx) in the last {{ request_summary.window_hours }} hours.</p>
+      <table>
+        <thead>
           <tr>
-            <td>{{ cls }}</td>
-            <td class="num">{{ request_summary.by_class.get(cls, 0) }}</td>
+            <th>Class</th>
+            <th class="num">Count</th>
           </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Total</strong></td>
+            <td class="num"><strong>{{ request_summary.total }}</strong></td>
+          </tr>
+          {% for cls in ["2xx", "3xx", "4xx", "5xx"] %}
+            <tr>
+              <td>{{ cls }}</td>
+              <td class="num">{{ request_summary.by_class.get(cls, 0) }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <p class="meta">From Cloud Logging — excludes /health/, /healthz, and
+        /tasks/refresh. Cached in-process for 5 minutes.</p>
+    {% endif %}
 
     <h2>Event cache</h2>
     <table>

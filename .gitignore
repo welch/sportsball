@@ -20,6 +20,7 @@ htmlcov/
 .idea/
 .vscode/
 *.swp
+*~
 
 # Secrets — never commit
 env.yaml

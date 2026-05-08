@@ -262,6 +262,28 @@ def _last_updated_label() -> str | None:
     return datetime.fromtimestamp(ts, tz=PT).strftime("%a %b %-d, %-I:%M %p %Z")
 
 
+def _format_version() -> str:
+    """Pretty-print the current GAE version ID for the health page.
+
+    `bin/deploy` encodes git state into the version ID as
+    `<tag>-<sha>-<clean|dirty>` (with dots in the tag mangled to hyphens).
+    Convert back to a readable form like `v0.4.0+dc9473a (dirty)`. If the
+    instance was deployed without `bin/deploy` (timestamp-style ID) or
+    we're in local dev (env var unset), fall back gracefully.
+    """
+    raw = os.environ.get("GAE_VERSION")
+    if not raw:
+        return "(local — GAE_VERSION not set)"
+    parts = raw.split("-")
+    if len(parts) >= 3 and parts[-1] in {"clean", "dirty"}:
+        tag = ".".join(parts[:-2])
+        sha = parts[-2]
+        suffix = " (dirty)" if parts[-1] == "dirty" else ""
+        return f"{tag}+{sha}{suffix}"
+    # Auto-generated timestamp ID — return raw so the operator sees it.
+    return raw
+
+
 def _humanize_age(seconds: float) -> str:
     """Render a non-negative duration as e.g. ``"3 minutes ago"``.
 
@@ -287,25 +309,17 @@ def _humanize_age(seconds: float) -> str:
     return f"{days:.1f} {unit} ago"
 
 
-def _is_health_path(path: str) -> bool:
-    return path.startswith("/health/")
-
-
-@app.after_request
-def _record_request_end(response: Any) -> Any:
-    """Tally each completed response into the rolling 24-hour stats deque.
-
-    The health page is intentionally excluded so reloading it doesn't
-    inflate its own counters.
-    """
-    if not _is_health_path(request.path):
-        stats.record_request(response.status_code)
-    return response
-
-
 @app.get("/healthz")
 def healthz() -> tuple[str, int]:
     return "ok", 200
+
+
+@app.get("/about")
+def about() -> str:
+    """Plain-language explanation of what the site does. The footer links
+    here so casual visitors don't get dumped straight into a code repo.
+    """
+    return render_template("about.html")
 
 
 @app.get("/health/<token>")
@@ -330,6 +344,7 @@ def health(token: str) -> str:
     return render_template(
         "health.html",
         now=now,
+        version_label=_format_version(),
         adapters=stats.adapter_stats(ADAPTER_NAMES),
         request_summary=stats.request_summary(),
         cache_event_count=len(cached_events),

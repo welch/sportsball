@@ -1,48 +1,13 @@
-from datetime import datetime, timedelta
+from unittest.mock import MagicMock
 
 import pytest
 
 from sportsball import stats
-from sportsball.aggregator import PT
 
 
 @pytest.fixture(autouse=True)
 def _reset_stats() -> None:
     stats.reset()
-
-
-def test_record_request_increments_total_and_class() -> None:
-    stats.record_request(200)
-    stats.record_request(204)
-    stats.record_request(404)
-    summary = stats.request_summary()
-    assert summary.total == 3
-    assert summary.by_class["2xx"] == 2
-    assert summary.by_class["4xx"] == 1
-    assert summary.by_class.get("5xx", 0) == 0
-
-
-def test_request_summary_prunes_entries_older_than_24h(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    base = datetime(2026, 5, 4, 12, 0, tzinfo=PT)
-    times = iter(
-        [
-            base - timedelta(hours=25),  # too old, should drop
-            base - timedelta(hours=23, minutes=59),  # in window
-            base,  # in window
-            base,  # read time
-        ]
-    )
-    monkeypatch.setattr(stats, "_now", lambda: next(times))
-    stats.record_request(200)  # too old
-    stats.record_request(500)  # in window
-    stats.record_request(301)  # in window
-    summary = stats.request_summary()
-    assert summary.total == 2
-    assert summary.by_class.get("2xx", 0) == 0
-    assert summary.by_class["3xx"] == 1
-    assert summary.by_class["5xx"] == 1
 
 
 def test_record_adapter_success_then_failure_keeps_both() -> None:
@@ -85,7 +50,6 @@ def test_snapshot_and_load_round_trip() -> None:
     stats.record_adapter_failure("warriors.fetch_events", "boom")
     snapshot = stats.snapshot_adapter_stats()
 
-    # Simulate a fresh process by clearing in-memory state, then loading.
     stats.reset()
     assert stats.adapter_stats(["giants.fetch_events"])[0].last_success_at is None
 
@@ -97,10 +61,99 @@ def test_snapshot_and_load_round_trip() -> None:
     assert w.last_failure_at is not None
 
 
-def test_load_adapter_stats_does_not_clear_request_window() -> None:
-    """Per-process traffic data must survive when adapter snapshot is loaded
-    from a remote-cron's state."""
-    stats.record_request(200)
-    snap = [stats.AdapterStats(name="giants.fetch_events", last_event_count=10)]
-    stats.load_adapter_stats(snap)
-    assert stats.request_summary().total == 1
+def _http_entry(status: int) -> MagicMock:
+    entry = MagicMock()
+    entry.http_request = {"status": status}
+    return entry
+
+
+def test_request_summary_aggregates_cloud_logging_entries(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_client = MagicMock()
+    fake_client.list_entries.return_value = [
+        _http_entry(200),
+        _http_entry(204),
+        _http_entry(301),
+        _http_entry(404),
+        _http_entry(500),
+    ]
+    monkeypatch.setattr(stats, "_logging_client", lambda: fake_client)
+
+    summary = stats.request_summary()
+    assert summary.source == "cloud-logging"
+    assert summary.total == 5
+    assert summary.by_class["2xx"] == 2
+    assert summary.by_class["3xx"] == 1
+    assert summary.by_class["4xx"] == 1
+    assert summary.by_class["5xx"] == 1
+    # user_traffic counts 2xx only (real page views).
+    assert summary.user_traffic == 2
+
+
+def test_request_summary_skips_entries_without_http_request(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    bare = MagicMock()
+    bare.http_request = None
+    no_status = MagicMock()
+    no_status.http_request = {}
+    fake_client = MagicMock()
+    fake_client.list_entries.return_value = [bare, no_status, _http_entry(200)]
+    monkeypatch.setattr(stats, "_logging_client", lambda: fake_client)
+
+    summary = stats.request_summary()
+    assert summary.total == 1
+    assert summary.by_class["2xx"] == 1
+
+
+def test_request_summary_caches_query_result(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = {"n": 0}
+
+    def fake_query(window_hours: int = 24) -> stats.RequestSummary:
+        calls["n"] += 1
+        return stats.RequestSummary(total=1, by_class={"2xx": 1})
+
+    monkeypatch.setattr(stats, "_query_request_summary", fake_query)
+    stats.request_summary()
+    stats.request_summary()
+    stats.request_summary()
+    assert calls["n"] == 1
+
+
+def test_request_summary_returns_unavailable_on_query_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def boom(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("API down")
+
+    monkeypatch.setattr(stats, "_logging_client", boom)
+    summary = stats.request_summary()
+    assert summary.source == "unavailable"
+    assert summary.total == 0
+
+
+def test_query_filter_excludes_operator_and_cron_paths(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The Cloud Logging filter must skip /health/, /healthz, and
+    /tasks/refresh so the user-traffic count isn't inflated by operator
+    page reloads, GAE health probes, or cron invocations.
+    """
+    fake_client = MagicMock()
+    fake_client.list_entries.return_value = []
+    monkeypatch.setattr(stats, "_logging_client", lambda: fake_client)
+
+    stats._query_request_summary()
+    call_filter = fake_client.list_entries.call_args.kwargs["filter_"]
+    assert "/health/" in call_filter
+    assert "/healthz" in call_filter
+    assert "/tasks/refresh" in call_filter
+    # All three are NOT clauses, not positive matches.
+    for path in ("/health/", "/healthz", "/tasks/refresh"):
+        idx = call_filter.find(path)
+        assert "NOT" in call_filter[max(0, idx - 80) : idx], (
+            f"path {path!r} not under a NOT clause in filter:\n{call_filter}"
+        )

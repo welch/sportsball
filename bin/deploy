@@ -1,0 +1,28 @@
+#!/bin/sh
+# Deploy to GAE with a custom version ID encoding the current git state.
+#
+# GAE auto-exposes the version ID at runtime via $GAE_VERSION, so the
+# health page can display "what's actually running" without shipping any
+# extra files. Format: <tag>-<short-sha>-<clean|dirty>, with the tag's
+# dots mangled to hyphens since GAE version IDs are restricted to
+# lowercase alphanumerics + hyphens.
+#
+# Bare `gcloud app deploy app.yaml` still works but assigns a timestamp
+# version ID — the health page shows that raw, which is itself a clear
+# "this wasn't deployed via bin/deploy" signal.
+
+set -e
+cd "$(dirname "$0")/.."
+
+TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo v0)
+SHA=$(git rev-parse --short HEAD)
+if git status --porcelain | grep -q .; then
+    DIRTY=dirty
+else
+    DIRTY=clean
+fi
+SAFE_TAG=$(echo "$TAG" | tr '.' '-')
+ID="${SAFE_TAG}-${SHA}-${DIRTY}"
+
+echo "Deploying as version: ${ID}"
+exec gcloud app deploy app.yaml --version="$ID" "$@"
