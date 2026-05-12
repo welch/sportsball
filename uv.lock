@@ -483,7 +483,7 @@ wheels = [
 
 [[package]]
 name = "google-cloud-ndb"
-version = "2.4.2"
+version = "2.5.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "google-api-core", extra = ["grpc"] },
@@ -493,9 +493,9 @@ dependencies = [
     { name = "pytz" },
     { name = "redis" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/44/4c/e715d34496b834dde37d61f347b3c1c402f3440530fba4f8a00c6e602f26/google_cloud_ndb-2.4.2.tar.gz", hash = "sha256:44e64e25a15f168ddff0f8c5a7288f7b0256ec51737948388df58b0ddc22586f", size = 160250, upload-time = "2026-04-02T21:23:31.792Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/f3/e8/f358f2c53ce4987e28e19328f87d73a2ecbeccda15e698edaf1222365a5f/google_cloud_ndb-2.5.0.tar.gz", hash = "sha256:d7a9baa912a9d3c4d76d5084d1ef34dc91613beee1412d5ebdb688f9834d5b69", size = 161425, upload-time = "2026-05-07T08:04:21.702Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/9f/dd/3e437f7ed4b858b0e14ce049e7d5b7ddfe6886309ea8b5638cf3edea2370/google_cloud_ndb-2.4.2-py3-none-any.whl", hash = "sha256:3522f271141f718d6ae390e6cb522c7c1805ded52e4743b1aa289cfaf44c2bdd", size = 179307, upload-time = "2026-04-02T21:23:09.031Z" },
+    { url = "https://files.pythonhosted.org/packages/20/d7/c4231613611c3f05ad6f1c41dbe3f42fd98d583deafe6a119e5738eac10b/google_cloud_ndb-2.5.0-py3-none-any.whl", hash = "sha256:f3a686946c9e945ba6d46ee13e705b5e44d787fa4ebf7d2fd9548466895b5dbd", size = 180544, upload-time = "2026-05-07T08:02:55.059Z" },
 ]
 
 [[package]]
@@ -1176,7 +1176,7 @@ dev = [
 requires-dist = [
     { name = "flask", specifier = ">=3.1.3" },
     { name = "google-cloud-logging", specifier = ">=3.15.0" },
-    { name = "google-cloud-ndb", specifier = ">=2.4.2" },
+    { name = "google-cloud-ndb", specifier = ">=2.5.0" },
     { name = "google-cloud-storage", specifier = ">=3.10.1" },
     { name = "gunicorn", specifier = ">=25.3.0" },
     { name = "pydantic", specifier = ">=2.13.3" },
