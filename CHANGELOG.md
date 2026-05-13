@@ -7,7 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.5.0] - 2026-05-08
+### Fixed
+
+- Warriors adapter unblocked from Akamai's WAF in front of `cdn.nba.com`.
+  The endpoint started 403'ing requests that didn't look like real
+  nba.com-fetched XHRs. Adding browser-context headers (Chrome-shaped
+  User-Agent, `Origin: https://www.nba.com`, `Referer: https://www.nba.com/`,
+  `Accept`, `Accept-Language`, and the `sec-ch-ua` / `sec-fetch-*` signals
+  the actual nba.com client sends) gets us through. Tested live: 89 GSW
+  events fetched.
+- Cron now preserves historical `last_success_at` for adapters that fail
+  this run. The handler loads the prior snapshot's `adapter_stats` before
+  calling `fetch_all`, so `record_adapter_failure(...)` keeps the
+  previous success metadata. Before this, a single bad day wiped out
+  "when did this adapter last work?" on the health page — exactly the
+  signal we needed when cdn.nba.com started 403'ing.
 
 ### Added
 

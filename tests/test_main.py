@@ -328,6 +328,51 @@ def test_refresh_first_run_marks_everything_new(monkeypatch: pytest.MonkeyPatch)
     main._cache["previously_unseen"] = []
 
 
+def test_refresh_preserves_last_success_across_failed_run(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regression: a single bad cron used to wipe out historical
+    last_success_at. Pre-loading the prior snapshot before fetch_all
+    keeps the success timestamp around for any adapter that fails now."""
+    from datetime import datetime as _dt
+
+    from sportsball.stats import AdapterStats
+
+    last_success = _dt(2026, 5, 10, 6, 0, tzinfo=PT)
+    prior_snapshot = [
+        AdapterStats(
+            name="warriors.fetch_events",
+            last_success_at=last_success,
+            last_event_count=89,
+        )
+    ]
+
+    # Prior storage state has the success record. fetch_all now fails for
+    # warriors via the resilience layer; we simulate that by having
+    # fetch_all itself record the failure.
+    def fake_fetch_all(adapters: list) -> list:
+        stats.record_adapter_failure("warriors.fetch_events", "HTTPError: 403")
+        return []
+
+    monkeypatch.setattr(main, "fetch_all", fake_fetch_all)
+    monkeypatch.setattr(main.store, "write_events", lambda *a, **k: None)
+    monkeypatch.setattr(main.store, "read_events", lambda: ([], object(), [], prior_snapshot))
+    main._cache["events"] = None
+    main._cache["fetched_at"] = 0.0
+    main._cache["previously_unseen"] = []
+
+    response = main.app.test_client().get("/tasks/refresh", headers={"X-Appengine-Cron": "true"})
+    assert response.status_code == 200
+    [snap] = stats.adapter_stats(["warriors.fetch_events"])
+    assert snap.last_success_at == last_success  # history preserved
+    assert snap.last_event_count == 89
+    assert snap.last_error == "HTTPError: 403"
+    assert snap.last_failure_at is not None
+    main._cache["events"] = None
+    main._cache["fetched_at"] = 0.0
+    main._cache["previously_unseen"] = []
+
+
 def test_refresh_continues_when_storage_write_fails(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(main, "fetch_all", lambda adapters: [])
     monkeypatch.setattr(main.store, "read_events", lambda: None)

@@ -386,11 +386,15 @@ def refresh() -> tuple[str, int]:
     """
     if request.headers.get("X-Appengine-Cron") != "true":
         abort(403)
+    # Load the prior cron's snapshot FIRST so `record_adapter_failure` can
+    # preserve historical `last_success_at` for any adapter that fails this
+    # run. Without this, a single bad day wipes out "when did this adapter
+    # last work?" — exactly what bit us when cdn.nba.com started 403'ing.
+    prior = store.read_events()
+    if prior is not None:
+        stats.load_adapter_stats(prior[3])
     events = fetch_all(_adapters())
     fetched_at = datetime.now(tz=PT)
-    # Compare against the previous cron's snapshot to compute the delta.
-    # First-ever run has no prior, so everything counts as previously unseen.
-    prior = store.read_events()
     prev_events = prior[0] if prior is not None else []
     prev_unseen = store.previously_unseen(events, prev_events)
     # Snapshot per-adapter outcomes so a future serving instance (which will
