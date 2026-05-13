@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Defensive headers on the other two upstream adapters too. Giants (MLB
+  Stats API, also Akamai-fronted) now sends a Chrome-shaped UA plus
+  `Origin`/`Referer` for `www.mlb.com`. Ticketmaster Discovery API gets
+  a `sportsball/0.5.0` UA and explicit `Accept: application/json` — the
+  API key already authenticates us so no need to masquerade as a browser
+  there. Verified all four adapters still 200 with the new headers and
+  return their expected event counts.
+
 ### Fixed
 
 - Warriors adapter unblocked from Akamai's WAF in front of `cdn.nba.com`.

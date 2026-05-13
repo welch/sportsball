@@ -19,6 +19,15 @@ SKIP_SUBGENRES = frozenset({"MLB", "NBA"})
 PAGE_SIZE = 100
 TIMEOUT_SECONDS = 30
 
+# Identify ourselves rather than the default `requests` UA. Helps if
+# Ticketmaster's API gateway ever decides to filter unidentified clients,
+# and is good hygiene — the API key already authenticates us, no need to
+# masquerade as a browser. Accept header narrows the response format.
+_HEADERS = {
+    "User-Agent": "sportsball/0.5.0 (+https://github.com/welch/sportsball)",
+    "Accept": "application/json",
+}
+
 
 def fetch_oracle_park_events() -> list[Event]:
     return _fetch_venue(ORACLE_PARK_VENUE_ID)
@@ -44,6 +53,7 @@ def _fetch_venue(venue_id: str) -> list[Event]:
                 "page": page,
                 "sort": "date,asc",
             },
+            headers=_HEADERS,
             timeout=TIMEOUT_SECONDS,
         )
         response.raise_for_status()
