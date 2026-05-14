@@ -229,9 +229,9 @@ google-cloud-logging==3.15.0 \
     --hash=sha256:72168a1e98bbfc27c75f0b8f630a7f5d786065f3f1f7e9e53d2d787a03693a4a \
     --hash=sha256:7dcc67434c4e7181510c133d5ac8fd4ce60c23fa4158661f67e54bf440c32450
     # via sportsball
-google-cloud-ndb==2.4.2 \
-    --hash=sha256:3522f271141f718d6ae390e6cb522c7c1805ded52e4743b1aa289cfaf44c2bdd \
-    --hash=sha256:44e64e25a15f168ddff0f8c5a7288f7b0256ec51737948388df58b0ddc22586f
+google-cloud-ndb==2.5.0 \
+    --hash=sha256:d7a9baa912a9d3c4d76d5084d1ef34dc91613beee1412d5ebdb688f9834d5b69 \
+    --hash=sha256:f3a686946c9e945ba6d46ee13e705b5e44d787fa4ebf7d2fd9548466895b5dbd
     # via sportsball
 google-cloud-storage==3.10.1 \
     --hash=sha256:97db9aa4460727982040edd2bd13ff3d5e2260b5331ad22895802da1fc2a5286 \
