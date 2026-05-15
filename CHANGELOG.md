@@ -7,8 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Hero photo on `/about`: heavy game-day traffic outside Oracle Park with
+  a singer mid-song atop a car. Placed directly under the centered title;
+  the rest of the page reads as commentary on the picture. ~260 KB JPEG,
+  cache-busted like the other static assets.
+
 ### Changed
 
+- `/about` blockquote no longer name-checks a specific artist — just
+  "a concert at the Chase Center" so the joke doesn't date.
 - Defensive headers on the other two upstream adapters too. Giants (MLB
   Stats API, also Akamai-fronted) now sends a Chrome-shaped UA plus
   `Origin`/`Referer` for `www.mlb.com`. Ticketmaster Discovery API gets

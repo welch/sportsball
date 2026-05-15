@@ -9,22 +9,26 @@
     <style>
       body { font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
              max-width: 640px; margin: 2em auto; padding: 0 1.25em; color: #222; }
-      h1 { font-size: 1.6em; margin-bottom: 0.25em; }
+      h1 { font-size: 1.6em; margin-bottom: 0.25em; text-align: center; }
       h2 { font-size: 1.15em; margin-top: 1.75em; }
       a { color: #1a4d8f; }
       ul { padding-left: 1.25em; }
       li { margin: 0.25em 0; }
       .home-link { display: inline-block; margin-top: 2em; font-size: 0.95em;
                    color: #555; }
+      .hero { display: block; max-width: 100%; height: auto; margin: 1.5em 0; }
     </style>
   </head>
   <body>
     <h1>About Is My Day @#$%&amp;!!!</h1>
 
+    <img class="hero" src="{{ vstatic('img/about-hero.jpg') }}"
+         alt="Heavy game-day traffic outside Oracle Park, with a singer mid-song atop a car in the middle of the street.">
+
     <p>This site speaks to the central question
       of life in San Francisco's South Beach and Mission Bay neighborhoods:</p>
     <blockquote><em>Is my day going to be hosed by a Giants or Warriors home game
-      (or a Celine Dion concert at the Chase Center)?</em></blockquote>
+      (or a concert at the Chase Center)?</em></blockquote>
 
     <h2>What it tracks</h2>
     <ul>
