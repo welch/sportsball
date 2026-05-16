@@ -1,6 +1,7 @@
 import hashlib
 import logging
 import os
+import random
 import threading
 import time
 from datetime import date, datetime
@@ -21,6 +22,39 @@ from sportsball.models import Event
 
 ENV_YAML_PATH = Path(__file__).resolve().parents[2] / "env.yaml"
 CACHE_TTL_SECONDS = 12 * 3600
+
+# MLB cities (current homes — Athletics moved to Sacramento for 2025-26
+# while they wait on their Las Vegas park). San Francisco is intentionally
+# excluded since the about page is asking "what about other cities?"
+MLB_CITIES = (
+    "Anaheim",
+    "Arlington",
+    "Atlanta",
+    "Baltimore",
+    "Boston",
+    "Chicago",
+    "Cincinnati",
+    "Cleveland",
+    "Denver",
+    "Detroit",
+    "Houston",
+    "Kansas City",
+    "Los Angeles",
+    "Miami",
+    "Milwaukee",
+    "Minneapolis",
+    "New York",
+    "Philadelphia",
+    "Phoenix",
+    "Pittsburgh",
+    "Sacramento",
+    "San Diego",
+    "Seattle",
+    "St. Louis",
+    "Tampa",
+    "Toronto",
+    "Washington",
+)
 
 
 def _load_env_yaml(path: Path = ENV_YAML_PATH) -> None:
@@ -328,7 +362,7 @@ def about() -> str:
     """Plain-language explanation of what the site does. The footer links
     here so casual visitors don't get dumped straight into a code repo.
     """
-    return render_template("about.html")
+    return render_template("about.html", random_city=random.choice(MLB_CITIES))
 
 
 @app.get("/health/<token>")

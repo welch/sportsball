@@ -249,6 +249,21 @@ def test_about_page_has_repo_link_and_back_link() -> None:
     assert b'href="/"' in body
 
 
+def test_about_page_renders_one_of_the_mlb_cities(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The "...but what about <city>?" header picks a random MLB city per
+    request. Pin the choice so we can assert it lands in the heading.
+    """
+    monkeypatch.setattr(main.random, "choice", lambda seq: "Detroit")
+    response = main.app.test_client().get("/about")
+    assert b"but what about Detroit?" in response.data
+
+
+def test_mlb_cities_excludes_home_city() -> None:
+    """SF should not be in the rotation — the page is asking 'what about
+    OTHER cities?'"""
+    assert "San Francisco" not in main.MLB_CITIES
+
+
 def test_footer_link_inherits_styling_in_served_css() -> None:
     response = main.app.test_client().get("/static/css/8ball.css")
     assert response.status_code == 200

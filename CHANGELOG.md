@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- "...but what about <random MLB city>?" — the about page's "other cities"
+  header now picks a random MLB home city per request from the 27 current
+  homes (San Francisco intentionally excluded). Refreshing the page is
+  surprisingly entertaining.
 - Hero photo on `/about`: heavy game-day traffic outside Oracle Park with
   a singer mid-song atop a car. Placed directly under the centered title;
   the rest of the page reads as commentary on the picture. ~260 KB JPEG,
