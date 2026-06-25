@@ -20,6 +20,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Warriors schedule now comes from ESPN's public API
+  (`site.api.espn.com/.../teams/gs/schedule`) instead of `cdn.nba.com`.
+  Akamai escalated from header sniffing to blocking by source IP and began
+  403'ing App Engine's egress ranges on Jun 16 — a block no header dressing
+  can clear from a datacenter IP (the request still 200s from a residential
+  IP). ESPN serves the same games and isn't gated that way. The adapter
+  fetches all three season phases (preseason / regular / postseason) and
+  computes the season label itself, since ESPN splits them across payloads.
+  `Event.source` for these is now `espn_nba`.
 - `/about` blockquote no longer name-checks a specific artist — just
   "a concert at the Chase Center" so the joke doesn't date.
 - Defensive headers on the other two upstream adapters too. Giants (MLB

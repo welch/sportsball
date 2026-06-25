@@ -1,0 +1,1000 @@
+{
+ "events": [
+  {
+   "id": "401809244",
+   "date": "2025-10-22T02:00Z",
+   "name": "Golden State Warriors at Los Angeles Lakers",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "crypto.com Arena"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401809237",
+   "date": "2025-10-24T02:17Z",
+   "name": "Denver Nuggets at Golden State Warriors",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Chase Center"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401809952",
+   "date": "2025-10-25T02:00Z",
+   "name": "Golden State Warriors at Portland Trail Blazers",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Moda Center"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401809976",
+   "date": "2025-10-28T02:00Z",
+   "name": "Memphis Grizzlies at Golden State Warriors",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Chase Center"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401809982",
+   "date": "2025-10-29T03:00Z",
+   "name": "LA Clippers at Golden State Warriors",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Chase Center"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401809994",
+   "date": "2025-10-31T00:00Z",
+   "name": "Golden State Warriors at Milwaukee Bucks",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Fiserv Forum"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401809999",
+   "date": "2025-11-01T23:00Z",
+   "name": "Golden State Warriors at Indiana Pacers",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Gainbridge Fieldhouse"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401810024",
+   "date": "2025-11-05T03:00Z",
+   "name": "Phoenix Suns at Golden State Warriors",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Chase Center"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401810036",
+   "date": "2025-11-06T03:00Z",
+   "name": "Golden State Warriors at Sacramento Kings",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Golden 1 Center"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401809779",
+   "date": "2025-11-08T03:00Z",
+   "name": "Golden State Warriors at Denver Nuggets",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Ball Arena"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401810051",
+   "date": "2025-11-10T01:30Z",
+   "name": "Indiana Pacers at Golden State Warriors",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Chase Center"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401810065",
+   "date": "2025-11-12T01:00Z",
+   "name": "Golden State Warriors at Oklahoma City Thunder",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Paycom Center"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401810075",
+   "date": "2025-11-13T01:00Z",
+   "name": "Golden State Warriors at San Antonio Spurs",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Frost Bank Center"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401809789",
+   "date": "2025-11-15T02:30Z",
+   "name": "Golden State Warriors at San Antonio Spurs",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Frost Bank Center"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401810092",
+   "date": "2025-11-17T00:00Z",
+   "name": "Golden State Warriors at New Orleans Pelicans",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Smoothie King Center"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401810104",
+   "date": "2025-11-19T00:00Z",
+   "name": "Golden State Warriors at Orlando Magic",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Kia Center"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401810112",
+   "date": "2025-11-20T00:30Z",
+   "name": "Golden State Warriors at Miami Heat",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Kaseya Center"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401809798",
+   "date": "2025-11-22T03:00Z",
+   "name": "Portland Trail Blazers at Golden State Warriors",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Chase Center"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401810146",
+   "date": "2025-11-25T03:00Z",
+   "name": "Utah Jazz at Golden State Warriors",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Chase Center"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401809808",
+   "date": "2025-11-27T03:00Z",
+   "name": "Houston Rockets at Golden State Warriors",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Chase Center"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401810153",
+   "date": "2025-11-30T01:30Z",
+   "name": "New Orleans Pelicans at Golden State Warriors",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Chase Center"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401810178",
+   "date": "2025-12-03T04:00Z",
+   "name": "Oklahoma City Thunder at Golden State Warriors",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Chase Center"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401810188",
+   "date": "2025-12-05T00:00Z",
+   "name": "Golden State Warriors at Philadelphia 76ers",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Xfinity Mobile Arena"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401810207",
+   "date": "2025-12-07T00:30Z",
+   "name": "Golden State Warriors at Cleveland Cavaliers",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Rocket Arena"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401810216",
+   "date": "2025-12-08T00:00Z",
+   "name": "Golden State Warriors at Chicago Bulls",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "United Center"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401836796",
+   "date": "2025-12-13T03:00Z",
+   "name": "Minnesota Timberwolves at Golden State Warriors",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Chase Center"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401836802",
+   "date": "2025-12-15T02:00Z",
+   "name": "Golden State Warriors at Portland Trail Blazers",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Moda Center"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401810233",
+   "date": "2025-12-19T02:00Z",
+   "name": "Golden State Warriors at Phoenix Suns",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Mortgage Matchup Center"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401810247",
+   "date": "2025-12-21T01:30Z",
+   "name": "Phoenix Suns at Golden State Warriors",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Chase Center"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401810262",
+   "date": "2025-12-23T03:00Z",
+   "name": "Orlando Magic at Golden State Warriors",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Chase Center"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401809240",
+   "date": "2025-12-25T22:17Z",
+   "name": "Dallas Mavericks at Golden State Warriors",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Chase Center"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401810296",
+   "date": "2025-12-28T20:30Z",
+   "name": "Golden State Warriors at Toronto Raptors",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Scotiabank Arena"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401810304",
+   "date": "2025-12-30T00:30Z",
+   "name": "Golden State Warriors at Brooklyn Nets",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Barclays Center"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401810317",
+   "date": "2025-12-31T18:00Z",
+   "name": "Golden State Warriors at Charlotte Hornets",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Spectrum Center"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401810339",
+   "date": "2026-01-03T03:00Z",
+   "name": "Oklahoma City Thunder at Golden State Warriors",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Chase Center"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401810347",
+   "date": "2026-01-04T03:00Z",
+   "name": "Utah Jazz at Golden State Warriors",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Chase Center"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401810363",
+   "date": "2026-01-06T03:00Z",
+   "name": "Golden State Warriors at LA Clippers",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Intuit Dome"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401810381",
+   "date": "2026-01-08T03:00Z",
+   "name": "Milwaukee Bucks at Golden State Warriors",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Chase Center"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401810394",
+   "date": "2026-01-10T03:00Z",
+   "name": "Sacramento Kings at Golden State Warriors",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Chase Center"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401810411",
+   "date": "2026-01-12T01:30Z",
+   "name": "Atlanta Hawks at Golden State Warriors",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Chase Center"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401810425",
+   "date": "2026-01-14T04:00Z",
+   "name": "Portland Trail Blazers at Golden State Warriors",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Chase Center"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401810439",
+   "date": "2026-01-16T03:00Z",
+   "name": "New York Knicks at Golden State Warriors",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Chase Center"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401810454",
+   "date": "2026-01-18T01:30Z",
+   "name": "Charlotte Hornets at Golden State Warriors",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Chase Center"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401810467",
+   "date": "2026-01-20T03:00Z",
+   "name": "Miami Heat at Golden State Warriors",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Chase Center"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401810473",
+   "date": "2026-01-21T03:00Z",
+   "name": "Toronto Raptors at Golden State Warriors",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Chase Center"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401810485",
+   "date": "2026-01-23T00:30Z",
+   "name": "Golden State Warriors at Dallas Mavericks",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "American Airlines Center"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401810499",
+   "date": "2026-01-24T22:30Z",
+   "name": "Golden State Warriors at Minnesota Timberwolves",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Target Center"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401857824",
+   "date": "2026-01-25T22:30Z",
+   "name": "Golden State Warriors at Minnesota Timberwolves",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Target Center"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401810518",
+   "date": "2026-01-27T02:30Z",
+   "name": "Golden State Warriors at Minnesota Timberwolves",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Target Center"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401810533",
+   "date": "2026-01-29T02:00Z",
+   "name": "Golden State Warriors at Utah Jazz",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Delta Center"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401810551",
+   "date": "2026-01-31T03:00Z",
+   "name": "Detroit Pistons at Golden State Warriors",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Chase Center"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401810579",
+   "date": "2026-02-04T03:00Z",
+   "name": "Philadelphia 76ers at Golden State Warriors",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Chase Center"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401810594",
+   "date": "2026-02-06T03:00Z",
+   "name": "Golden State Warriors at Phoenix Suns",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Mortgage Matchup Center"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401810608",
+   "date": "2026-02-08T01:30Z",
+   "name": "Golden State Warriors at Los Angeles Lakers",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "crypto.com Arena"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401810623",
+   "date": "2026-02-10T03:00Z",
+   "name": "Memphis Grizzlies at Golden State Warriors",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Chase Center"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401810643",
+   "date": "2026-02-12T03:00Z",
+   "name": "San Antonio Spurs at Golden State Warriors",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Chase Center"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401810654",
+   "date": "2026-02-20T03:00Z",
+   "name": "Boston Celtics at Golden State Warriors",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Chase Center"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401810675",
+   "date": "2026-02-22T20:30Z",
+   "name": "Denver Nuggets at Golden State Warriors",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Chase Center"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401810693",
+   "date": "2026-02-25T01:00Z",
+   "name": "Golden State Warriors at New Orleans Pelicans",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Smoothie King Center"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401810699",
+   "date": "2026-02-26T00:30Z",
+   "name": "Golden State Warriors at Memphis Grizzlies",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "FedExForum"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401810721",
+   "date": "2026-03-01T01:30Z",
+   "name": "Los Angeles Lakers at Golden State Warriors",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Chase Center"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401810737",
+   "date": "2026-03-03T03:00Z",
+   "name": "LA Clippers at Golden State Warriors",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Chase Center"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401810757",
+   "date": "2026-03-06T00:30Z",
+   "name": "Golden State Warriors at Houston Rockets",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Toyota Center (Houston)"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401810775",
+   "date": "2026-03-08T01:30Z",
+   "name": "Golden State Warriors at Oklahoma City Thunder",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Paycom Center"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401810789",
+   "date": "2026-03-10T01:00Z",
+   "name": "Golden State Warriors at Utah Jazz",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Delta Center"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401810798",
+   "date": "2026-03-11T02:00Z",
+   "name": "Chicago Bulls at Golden State Warriors",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Chase Center"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401810821",
+   "date": "2026-03-14T02:00Z",
+   "name": "Minnesota Timberwolves at Golden State Warriors",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Chase Center"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401810836",
+   "date": "2026-03-16T00:00Z",
+   "name": "Golden State Warriors at New York Knicks",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Madison Square Garden"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401810839",
+   "date": "2026-03-16T23:00Z",
+   "name": "Golden State Warriors at Washington Wizards",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Capital One Arena"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401810854",
+   "date": "2026-03-18T23:00Z",
+   "name": "Golden State Warriors at Boston Celtics",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "TD Garden"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401810872",
+   "date": "2026-03-20T23:30Z",
+   "name": "Golden State Warriors at Detroit Pistons",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Little Caesars Arena"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401810881",
+   "date": "2026-03-22T00:00Z",
+   "name": "Golden State Warriors at Atlanta Hawks",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "State Farm Arena"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401810899",
+   "date": "2026-03-24T01:30Z",
+   "name": "Golden State Warriors at Dallas Mavericks",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "American Airlines Center"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401810915",
+   "date": "2026-03-26T02:00Z",
+   "name": "Brooklyn Nets at Golden State Warriors",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Chase Center"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401810928",
+   "date": "2026-03-28T02:00Z",
+   "name": "Washington Wizards at Golden State Warriors",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Chase Center"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401810945",
+   "date": "2026-03-30T02:00Z",
+   "name": "Golden State Warriors at Denver Nuggets",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Ball Arena"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401810968",
+   "date": "2026-04-02T02:00Z",
+   "name": "San Antonio Spurs at Golden State Warriors",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Chase Center"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401810972",
+   "date": "2026-04-03T02:00Z",
+   "name": "Cleveland Cavaliers at Golden State Warriors",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Chase Center"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401810997",
+   "date": "2026-04-06T02:00Z",
+   "name": "Houston Rockets at Golden State Warriors",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Chase Center"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401811009",
+   "date": "2026-04-08T02:00Z",
+   "name": "Sacramento Kings at Golden State Warriors",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Chase Center"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401811025",
+   "date": "2026-04-10T02:00Z",
+   "name": "Los Angeles Lakers at Golden State Warriors",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Chase Center"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401811039",
+   "date": "2026-04-11T02:00Z",
+   "name": "Golden State Warriors at Sacramento Kings",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Golden 1 Center"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401811054",
+   "date": "2026-04-13T00:30Z",
+   "name": "Golden State Warriors at LA Clippers",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Intuit Dome"
+     }
+    }
+   ]
+  }
+ ]
+}

@@ -1,0 +1,64 @@
+{
+ "events": [
+  {
+   "id": "401812677",
+   "date": "2025-10-06T00:30Z",
+   "name": "Los Angeles Lakers at Golden State Warriors",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Chase Center"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401812689",
+   "date": "2025-10-09T02:00Z",
+   "name": "Portland Trail Blazers at Golden State Warriors",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Chase Center"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401812710",
+   "date": "2025-10-13T01:30Z",
+   "name": "Golden State Warriors at Los Angeles Lakers",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "crypto.com Arena"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401812720",
+   "date": "2025-10-15T02:00Z",
+   "name": "Golden State Warriors at Portland Trail Blazers",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Moda Center"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401812737",
+   "date": "2025-10-18T02:00Z",
+   "name": "LA Clippers at Golden State Warriors",
+   "competitions": [
+    {
+     "venue": {
+      "fullName": "Chase Center"
+     }
+    }
+   ]
+  }
+ ]
+}
