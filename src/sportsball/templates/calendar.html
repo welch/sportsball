@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description"
+          content="A month at a time: which days have events at Oracle Park or Chase Center.">
+    <meta property="og:title"
+          content="Is my month {{ verb }}? Events at Oracle Park and Chase Center">
+    <title>Is my month {{ verb }}? {{ month_label }}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="stylesheet" type="text/css"
+          href="https://fonts.googleapis.com/css?family=Permanent+Marker&display=swap">
+    <link rel="stylesheet" type="text/css"
+          href="{{ vstatic('css/8ball.css') }}">
+    <link rel="icon" type="image/png"
+          href="{{ vstatic('img/icon-48.png') }}">
+  </head>
+  <body>
+    <main>
+      <h1><a class="plain" href="{{ home_url }}">Is my month <span class="verb">{{ verb }}?</span></a></h1>
+
+      <nav class="cal-nav">
+        <a class="chev" href="{{ prev_url }}" rel="prev"
+           aria-label="Go to {{ prev_label }}">&lsaquo;</a>
+        <span class="cal-title">{{ month_label }}</span>
+        <a class="chev" href="{{ next_url }}" rel="next"
+           aria-label="Go to {{ next_label }}">&rsaquo;</a>
+      </nav>
+
+      <div class="cal-grid">
+        {% for label in weekday_labels %}
+          <div class="cal-weekday" aria-hidden="true">{{ label }}</div>
+        {% endfor %}
+
+        {% for week in view.weeks %}
+          {% for cell in week %}
+            {% set count = cell.events | length %}
+            <a class="cal-day{% for h in cell.halos %} halo-{{ h }}{% endfor %}{% if not cell.in_month %} outside{% endif %}{% if cell.is_today %} is-today{% endif %}"
+               href="{{ day_url(cell.day) }}"
+               aria-label="{{ cell.day.strftime('%A, %B %-d, %Y') }} — {{ count }} event{{ '' if count == 1 else 's' }}"
+               {% if count %}title="{% for e in cell.events %}{{ e.name }} at {{ e.venue }}{{ '' if loop.last else '\n' }}{% endfor %}"{% endif %}>
+              <span class="cal-num">{{ cell.day.day }}</span>
+            </a>
+          {% endfor %}
+        {% endfor %}
+      </div>
+
+      <p class="cal-legend">
+        <span class="giants">&#9679;</span> Giants
+        <span class="warriors">&#9679;</span> Warriors &amp; Valkyries
+        <span class="concert">&#9679;</span> concerts
+      </p>
+    </main>
+    {% if last_updated %}
+      <footer><a href="{{ url_for('about') }}">last updated {{ last_updated }}</a></footer>
+    {% endif %}
+  </body>
+</html>

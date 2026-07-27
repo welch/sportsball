@@ -17,7 +17,14 @@ from werkzeug.wrappers import Response
 
 from sportsball import stats, store
 from sportsball.adapters import giants, ticketmaster, warriors
-from sportsball.aggregator import PT, compute_status, fetch_all
+from sportsball.aggregator import (
+    PT,
+    WEEKDAY_LABELS,
+    compute_status,
+    day_halos,
+    fetch_all,
+    month_view,
+)
 from sportsball.models import Event
 
 ENV_YAML_PATH = Path(__file__).resolve().parents[2] / "env.yaml"
@@ -83,6 +90,26 @@ class IsoDateConverter(BaseConverter):
         return value.isoformat()
 
 
+class MonthConverter(BaseConverter):
+    """Match YYYY-MM path segments and parse to the first of that month.
+
+    Deliberately narrower than `isodate` so `/2026-05` and `/2026-05-15`
+    can't be confused for one another.
+    """
+
+    regex = r"\d{4}-\d{2}"
+
+    def to_python(self, value: str) -> date:
+        year, _, month = value.partition("-")
+        try:
+            return date(int(year), int(month), 1)
+        except ValueError as exc:
+            raise ValidationError() from exc
+
+    def to_url(self, value: date) -> str:
+        return f"{value.year:04d}-{value.month:02d}"
+
+
 class VerbConverter(BaseConverter):
     """Letters-only verb path segment, so `/2026-05-15` can't be misread as a verb."""
 
@@ -92,6 +119,7 @@ class VerbConverter(BaseConverter):
 app = Flask(__name__)
 app.url_map.converters["isodate"] = IsoDateConverter
 app.url_map.converters["verb"] = VerbConverter
+app.url_map.converters["month"] = MonthConverter
 
 log = logging.getLogger(__name__)
 
@@ -245,11 +273,30 @@ def _verb_color_class(today_events: list[Event]) -> str:
     return ""
 
 
+def _nav_urls(verb: str | None) -> Any:
+    """Build a URL helper that carries an explicit verb across navigation.
+
+    `verb` here is the *path* verb — None when the visitor came in on a
+    bare URL and the verb is coming from `$VERB`. Threading it through
+    means someone who arrived at `/fucked/` stays in `/fucked/` when they
+    click into the calendar and back out to a day, instead of silently
+    reverting to the deployed default.
+    """
+
+    def to(endpoint: str, **values: Any) -> str:
+        if verb is not None:
+            values["verb"] = verb
+        return url_for(endpoint, **values)
+
+    return to
+
+
 @app.get("/")
 @app.get("/<verb:verb>/")
 @app.get("/<isodate:isodate>")
 @app.get("/<verb:verb>/<isodate:isodate>")
 def index(verb: str | None = None, isodate: date | None = None) -> str:
+    url = _nav_urls(verb)
     if verb is None:
         verb = os.environ.get("VERB", "hosed")
     if isodate is not None:
@@ -257,6 +304,7 @@ def index(verb: str | None = None, isodate: date | None = None) -> str:
     else:
         now = datetime.now(tz=PT)
     status = compute_status(_events(), now)
+    halos = day_halos(status.today_events)
     quiet_label = (
         _format_day_label(status.next_quiet_date, status.today)
         if status.next_quiet_date and status.today_events
@@ -275,16 +323,47 @@ def index(verb: str | None = None, isodate: date | None = None) -> str:
         verb=verb,
         fucked=bool(status.today_events),
         status=status,
-        giants_active=any(
-            e.venue == "Oracle Park" and e.category == "sports" for e in status.today_events
-        ),
-        warriors_active=any(
-            e.venue == "Chase Center" and e.category == "sports" for e in status.today_events
-        ),
-        concert_active=any(e.category == "concert" for e in status.today_events),
+        giants_active="giants" in halos,
+        warriors_active="warriors" in halos,
+        concert_active="concert" in halos,
         verb_class=_verb_color_class(status.today_events),
         quiet_label=quiet_label,
         next_event_label=next_event_label,
+        last_updated=_last_updated_label(),
+        calendar_url=url("month_calendar", ym=status.today.replace(day=1)),
+    )
+
+
+@app.get("/calendar/")
+@app.get("/calendar/<month:ym>")
+@app.get("/<verb:verb>/calendar/")
+@app.get("/<verb:verb>/calendar/<month:ym>")
+def month_calendar(verb: str | None = None, ym: date | None = None) -> str:
+    """Month grid where each day wears the same colored rings as the 8-ball.
+
+    Clicking a day drops into the 8-ball view for that date; the chevrons
+    step a month at a time with no bound in either direction — the event
+    horizon is whatever the adapters know about, and empty months are a
+    perfectly good answer.
+    """
+    url = _nav_urls(verb)
+    if verb is None:
+        verb = os.environ.get("VERB", "hosed")
+    today = datetime.now(tz=PT).date()
+    month = ym if ym is not None else today.replace(day=1)
+    view = month_view(_events(), month, today)
+    return render_template(
+        "calendar.html",
+        verb=verb,
+        view=view,
+        weekday_labels=WEEKDAY_LABELS,
+        month_label=month.strftime("%B %Y"),
+        prev_url=url("month_calendar", ym=view.prev_month),
+        next_url=url("month_calendar", ym=view.next_month),
+        prev_label=view.prev_month.strftime("%B %Y"),
+        next_label=view.next_month.strftime("%B %Y"),
+        home_url=url("index"),
+        day_url=lambda d: url("index", isodate=d),
         last_updated=_last_updated_label(),
     )
 

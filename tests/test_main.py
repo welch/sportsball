@@ -840,3 +840,140 @@ def test_humanize_age_units() -> None:
     # exactly 1 day → "1.0 day ago"
     assert main._humanize_age(86400) == "1.0 day ago"
     assert main._humanize_age(86400 * 3.5) == "3.5 days ago"
+
+
+def test_index_date_links_to_that_month_calendar(
+    monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
+) -> None:
+    monkeypatch.setattr(main, "_events", lambda: [])
+    response = main.app.test_client().get("/")
+    assert b'href="/calendar/2026-05"' in response.data
+
+
+def test_index_date_link_for_explicit_date_uses_that_month(
+    monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
+) -> None:
+    monkeypatch.setattr(main, "_events", lambda: [])
+    response = main.app.test_client().get("/2026-12-25")
+    assert b'href="/calendar/2026-12"' in response.data
+
+
+def test_index_date_link_preserves_url_verb(
+    monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
+) -> None:
+    monkeypatch.setattr(main, "_events", lambda: [])
+    response = main.app.test_client().get("/fucked/")
+    assert b'href="/fucked/calendar/2026-05"' in response.data
+
+
+def test_calendar_renders_month_grid(monkeypatch: pytest.MonkeyPatch, fixed_now: datetime) -> None:
+    monkeypatch.setattr(main, "_events", lambda: [])
+    response = main.app.test_client().get("/calendar/2026-05")
+    assert response.status_code == 200
+    body = response.data
+    assert b"May 2026" in body
+    assert b"Sun" in body and b"Sat" in body
+    # Every day of May is present as a link to its 8-ball view.
+    assert b'href="/2026-05-01"' in body
+    assert b'href="/2026-05-31"' in body
+
+
+def test_calendar_bare_url_defaults_to_current_month(
+    monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
+) -> None:
+    monkeypatch.setattr(main, "_events", lambda: [])
+    response = main.app.test_client().get("/calendar/")
+    assert response.status_code == 200
+    assert b"May 2026" in response.data
+
+
+def test_calendar_chevrons_step_a_month(
+    monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
+) -> None:
+    monkeypatch.setattr(main, "_events", lambda: [])
+    body = main.app.test_client().get("/calendar/2026-05").data
+    assert b'href="/calendar/2026-04"' in body
+    assert b'href="/calendar/2026-06"' in body
+
+
+def test_calendar_chevrons_wrap_across_the_year(
+    monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
+) -> None:
+    monkeypatch.setattr(main, "_events", lambda: [])
+    body = main.app.test_client().get("/calendar/2026-01").data
+    assert b'href="/calendar/2025-12"' in body
+    assert b'href="/calendar/2026-02"' in body
+
+
+def test_calendar_chevrons_preserve_verb(
+    monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
+) -> None:
+    monkeypatch.setattr(main, "_events", lambda: [])
+    body = main.app.test_client().get("/fucked/calendar/2026-05").data
+    assert b'href="/fucked/calendar/2026-04"' in body
+    assert b'href="/fucked/calendar/2026-06"' in body
+    # And clicking a day keeps the verb too.
+    assert b'href="/fucked/2026-05-04"' in body
+
+
+def test_calendar_day_wears_event_halos(
+    monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
+) -> None:
+    giants = _ev("Mets at Giants", "Oracle Park", "2026-05-05T02:05:00+00:00")
+    concert = _ev("Some Band", "Chase Center", "2026-05-05T03:00:00+00:00", "concert")
+    monkeypatch.setattr(main, "_events", lambda: [giants, concert])
+    body = main.app.test_client().get("/calendar/2026-05").data.decode()
+    # Both events land on 5/4 PT → that one cell carries both rings.
+    cell = [line for line in body.splitlines() if 'href="/2026-05-04"' in line]
+    assert cell, "no cell for 2026-05-04"
+    assert "halo-giants" in body and "halo-concert" in body
+    assert "cal-day halo-giants halo-concert" in body
+
+
+def test_calendar_marks_today(monkeypatch: pytest.MonkeyPatch, fixed_now: datetime) -> None:
+    monkeypatch.setattr(main, "_events", lambda: [])
+    body = main.app.test_client().get("/calendar/2026-05").data.decode()
+    assert "is-today" in body
+    # Only one cell is today.
+    assert body.count("is-today") == 1
+
+
+def test_calendar_other_month_has_no_today_marker(
+    monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
+) -> None:
+    monkeypatch.setattr(main, "_events", lambda: [])
+    body = main.app.test_client().get("/calendar/2026-09").data.decode()
+    assert "is-today" not in body
+
+
+def test_calendar_dims_adjacent_month_days(
+    monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
+) -> None:
+    monkeypatch.setattr(main, "_events", lambda: [])
+    body = main.app.test_client().get("/calendar/2026-05").data.decode()
+    # May 2026 opens on Fri 5/1, so the grid spills back to Sun 4/26.
+    assert 'href="/2026-04-26"' in body
+    assert "outside" in body
+
+
+def test_calendar_rejects_malformed_month(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(main, "_events", lambda: [])
+    client = main.app.test_client()
+    assert client.get("/calendar/2026-13").status_code == 404
+    assert client.get("/calendar/not-a-month").status_code == 404
+
+
+def test_calendar_links_home(monkeypatch: pytest.MonkeyPatch, fixed_now: datetime) -> None:
+    monkeypatch.setattr(main, "_events", lambda: [])
+    body = main.app.test_client().get("/calendar/2026-05").data
+    assert b'href="/"' in body
+
+
+def test_isodate_route_still_wins_over_month_route(
+    monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
+) -> None:
+    """`/2026-05-15` is a day, not a month — the converters must not collide."""
+    monkeypatch.setattr(main, "_events", lambda: [])
+    response = main.app.test_client().get("/2026-05-15")
+    assert response.status_code == 200
+    assert b"Friday, May 15, 2026" in response.data

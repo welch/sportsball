@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Monthly calendar view at `/calendar/<YYYY-MM>` (and `/calendar/` for the
+  current month). Every day wears the same colored rings as the 8-ball
+  halo — orange Giants, blue Chase Center sports, purple concerts, stacked
+  concentrically on days with more than one — so a month's worth of
+  parking misery reads at a glance. Chevrons step a month in either
+  direction with no bound; clicking a day drops into the 8-ball view for
+  that date, and clicking the date under the 8-ball opens its month. A
+  verb in the path (`/fucked/…`) survives every hop. Days spilling in from
+  the adjacent months are dimmed but still live, since a game on the 1st
+  matters when you're looking at the 31st.
+  The halo rules moved to `aggregator.day_halos()` and the `.halo-*` CSS
+  dropped its `.ball-frame` qualifier, so both pages read one definition
+  of "what color is this day?" rather than two that can drift apart.
+
 - "...but what about <random MLB city>?" — the about page's "other cities"
   header now picks a random MLB home city per request from the 27 current
   homes (San Francisco intentionally excluded). Refreshing the page is

@@ -1,5 +1,6 @@
+import calendar as _calendar
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -8,6 +9,10 @@ from sportsball.models import Event
 
 PT = ZoneInfo("America/Los_Angeles")
 TRACKED_VENUES = frozenset({"Oracle Park", "Chase Center"})
+
+# Calendar grids run Sunday-first, US convention.
+_CAL = _calendar.Calendar(firstweekday=6)
+WEEKDAY_LABELS = ("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat")
 
 EventFetcher = Callable[[], list[Event]]
 NamedAdapter = tuple[str, EventFetcher]
@@ -22,6 +27,81 @@ class Status:
     next_event_date: date | None = None
     next_event_events: list[Event] = field(default_factory=list)
     next_quiet_date: date | None = None
+
+
+@dataclass(frozen=True)
+class CalendarDay:
+    """One cell of a month grid."""
+
+    day: date
+    in_month: bool
+    is_today: bool
+    events: list[Event] = field(default_factory=list)
+    halos: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class MonthView:
+    month: date  # first of the displayed month
+    prev_month: date
+    next_month: date
+    weeks: list[list[CalendarDay]] = field(default_factory=list)
+
+
+def day_halos(events: Iterable[Event]) -> list[str]:
+    """Halo color names for a day's events, innermost ring first.
+
+    The single source of truth for "what color is this day?" — the 8-ball's
+    halo and the calendar's day rings both read from here, so a day can
+    never be orange on one page and blue on the other. Order matters: the
+    CSS draws them in this sequence from the inside out.
+    """
+    halos = []
+    if any(e.venue == "Oracle Park" and e.category == "sports" for e in events):
+        halos.append("giants")
+    if any(e.venue == "Chase Center" and e.category == "sports" for e in events):
+        halos.append("warriors")
+    if any(e.category == "concert" for e in events):
+        halos.append("concert")
+    return halos
+
+
+def month_view(events: list[Event], month: date, today: date) -> MonthView:
+    """Build a Sunday-first grid of whole weeks covering ``month``.
+
+    Leading/trailing cells belong to the adjacent months — they're marked
+    ``in_month=False`` so the template can dim them, but they still carry
+    their own events and stay clickable, since a game on the 1st is just
+    as real when you're looking at the previous month.
+    """
+    by_date: dict[date, list[Event]] = {}
+    for e in events:
+        by_date.setdefault(e.starts_at.astimezone(PT).date(), []).append(e)
+    weeks = [
+        [
+            CalendarDay(
+                day=d,
+                in_month=d.month == month.month and d.year == month.year,
+                is_today=d == today,
+                events=sorted(by_date.get(d, []), key=lambda e: e.starts_at),
+                halos=day_halos(by_date.get(d, [])),
+            )
+            for d in week
+        ]
+        for week in _CAL.monthdatescalendar(month.year, month.month)
+    ]
+    return MonthView(
+        month=month,
+        prev_month=_shift_month(month, -1),
+        next_month=_shift_month(month, +1),
+        weeks=weeks,
+    )
+
+
+def _shift_month(month: date, delta: int) -> date:
+    """First of the month ``delta`` months away from ``month``."""
+    index = month.year * 12 + (month.month - 1) + delta
+    return date(index // 12, index % 12 + 1, 1)
 
 
 def fetch_all(adapters: list[NamedAdapter]) -> list[Event]:

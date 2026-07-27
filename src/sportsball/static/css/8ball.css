@@ -57,11 +57,15 @@ p {
     margin: 0.5em 0;
 }
 
-/* 8-ball halo: a circular padding zone behind the image filled with a soft
+/* Halo: a circular padding zone behind the content filled with a soft
  * radial-gradient glow. Stops use `closest-side` so percentages are measured
- * against the wrapper's half-width (not its diagonal), which makes ring
- * placement intuitive: the image covers ~64% of that radius, so visible halo
- * lives in the 60–100% range.
+ * against the element's half-width (not its diagonal), which makes ring
+ * placement intuitive: the 8-ball image covers ~64% of that radius, so visible
+ * halo lives in the 60–100% range.
+ *
+ * The `.halo-*` rules below are deliberately element-agnostic — the 8-ball's
+ * `.ball-frame` and the calendar's `.cal-day` both wear them, which is what
+ * keeps a day the same color on both pages.
  */
 .ball-frame {
     display: inline-block;
@@ -102,7 +106,7 @@ p {
     }
 }
 
-.ball-frame.halo-giants {
+.halo-giants {
     background: radial-gradient(
         circle closest-side,
         rgba(253, 90, 30, 0) 60%,
@@ -111,7 +115,7 @@ p {
     );
 }
 
-.ball-frame.halo-warriors {
+.halo-warriors {
     background: radial-gradient(
         circle closest-side,
         rgba(29, 66, 138, 0) 60%,
@@ -120,7 +124,7 @@ p {
     );
 }
 
-.ball-frame.halo-concert {
+.halo-concert {
     background: radial-gradient(
         circle closest-side,
         rgba(126, 47, 142, 0) 60%,
@@ -130,7 +134,7 @@ p {
 }
 
 /* Two-halo days: inner ring just outside the image, outer ring at the rim. */
-.ball-frame.halo-giants.halo-warriors {
+.halo-giants.halo-warriors {
     background:
         radial-gradient(
             circle closest-side,
@@ -146,7 +150,7 @@ p {
         );
 }
 
-.ball-frame.halo-giants.halo-concert {
+.halo-giants.halo-concert {
     background:
         radial-gradient(
             circle closest-side,
@@ -162,7 +166,7 @@ p {
         );
 }
 
-.ball-frame.halo-warriors.halo-concert {
+.halo-warriors.halo-concert {
     background:
         radial-gradient(
             circle closest-side,
@@ -179,7 +183,7 @@ p {
 }
 
 /* All three: orange innermost, blue middle, purple outermost. */
-.ball-frame.halo-giants.halo-warriors.halo-concert {
+.halo-giants.halo-warriors.halo-concert {
     background:
         radial-gradient(
             circle closest-side,
@@ -199,6 +203,118 @@ p {
             rgba(126, 47, 142, 0.7) 96%,
             rgba(126, 47, 142, 0) 100%
         );
+}
+
+/* Links that shouldn't announce themselves as links — the 8-ball's date and
+ * the calendar's title. They're discoverable by hovering; dressing them in
+ * blue underline would wreck the hand-drawn look.
+ */
+a.plain,
+a.plain:hover,
+a.plain:visited,
+a.plain:active {
+    color: inherit;
+    text-decoration: none;
+}
+
+/* Calendar ------------------------------------------------------------- */
+
+.cal-nav {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6em;
+    margin: 0.4em 0 0.6em;
+}
+
+.cal-title {
+    font-size: 34px;
+    min-width: 6.5em;
+}
+
+.chev {
+    font-size: 44px;
+    line-height: 1;
+    text-decoration: none;
+    color: #000;
+    padding: 0 0.25em;
+    border-radius: 8px;
+}
+
+.chev:visited,
+.chev:active {
+    color: #000;
+}
+
+.chev:hover {
+    background: rgba(0, 0, 0, 0.07);
+}
+
+.cal-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 2px;
+}
+
+.cal-weekday {
+    font-size: 14px;
+    color: #888;
+    padding-bottom: 0.2em;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+/* Each day is its own circular halo canvas — same gradient machinery as the
+ * 8-ball, just scaled down. `aspect-ratio` keeps the cells square so
+ * `closest-side` measures a true radius and the rings stay circular.
+ */
+.cal-day {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    text-decoration: none;
+    color: #000;
+    font-size: 22px;
+}
+
+.cal-day:visited,
+.cal-day:active {
+    color: #000;
+}
+
+.cal-day:hover .cal-num {
+    background: rgba(0, 0, 0, 0.08);
+}
+
+.cal-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.7em;
+    height: 1.7em;
+    border-radius: 50%;
+}
+
+/* Adjacent-month spill: dimmed, but still live links. */
+.cal-day.outside {
+    opacity: 0.32;
+}
+
+.cal-day.is-today .cal-num {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+.cal-legend {
+    font-size: 13px;
+    color: #666;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    margin-top: 1.4em;
+}
+
+.cal-legend span {
+    font-size: 15px;
 }
 
 footer {
@@ -238,5 +354,17 @@ footer a:active {
     .ball-glow {
         top: 40px;
         left: 40px;
+    }
+    .cal-title {
+        font-size: 26px;
+    }
+    .chev {
+        font-size: 36px;
+    }
+    .cal-day {
+        font-size: 17px;
+    }
+    .cal-weekday {
+        font-size: 11px;
     }
 }

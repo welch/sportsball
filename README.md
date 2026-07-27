@@ -40,7 +40,16 @@ URL patterns:
 | `/<verb>/` | Same, with a custom verb (`@#$%&!!!`, `screwed`, …) |
 | `/2026-12-25` | Show what's scheduled for any other date |
 | `/<verb>/2026-12-25` | Both |
+| `/calendar/` | Month view of the current month |
+| `/calendar/2026-12` | Month view of any month |
+| `/<verb>/calendar/2026-12` | Both |
 | `/health/<token>` | Operator status page (token-gated, 404s on mismatch) |
+
+The calendar rings each day in the same colors the 8-ball halo uses — orange
+for the Giants, blue for Chase Center sports, purple for concerts, stacked
+concentrically when a day has more than one. Clicking the date under the
+8-ball opens that month; clicking a day in the calendar goes back to the
+8-ball for that date. A verb in the path is carried across both hops.
 
 ## Run your own
 
