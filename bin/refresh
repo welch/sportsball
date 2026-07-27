@@ -1,0 +1,54 @@
+#!/bin/sh
+# Force the daily event refresh from a laptop.
+#
+# `/tasks/refresh` is gated on the `X-Appengine-Cron` header, which App
+# Engine injects for its own cron invocations and strips from anything
+# arriving off the internet — so the endpoint can't be triggered remotely,
+# by us or by anyone else. Nothing strips it locally, though: run the app
+# here, send the header ourselves, and the handler does exactly what the
+# 6am cron does — fetch every adapter and write the snapshot to Cloud
+# Storage. Deployed instances pick it up on their next cold start, or when
+# their 12-hour cache expires.
+#
+# This writes the real production blob: the adapters run on your machine
+# and your credentials do the write. Run it AFTER deploying, never before —
+# a snapshot written by newer code can carry fields the deployed version
+# doesn't understand yet. `bin/deploy --refresh` gets the order right.
+
+set -e
+cd "$(dirname "$0")/.."
+
+PORT="${PORT:-8099}"
+
+# The app reads env.yaml itself at import, but resolve the bucket here too:
+# an unset EVENTS_BUCKET turns the write into a logged no-op, and a refresh
+# that silently doesn't persist is worse than one that refuses to start.
+BUCKET="${EVENTS_BUCKET:-$(sed -n 's/^[[:space:]]*EVENTS_BUCKET:[[:space:]]*//p' env.yaml 2>/dev/null)}"
+if [ -z "$BUCKET" ]; then
+    echo "EVENTS_BUCKET is unset and env.yaml doesn't supply one." >&2
+    echo "Refusing to run: the snapshot write would be a silent no-op." >&2
+    exit 1
+fi
+export EVENTS_BUCKET="$BUCKET"
+
+echo "Refreshing events into gs://${BUCKET} (via 127.0.0.1:${PORT})"
+
+uv run gunicorn -b "127.0.0.1:${PORT}" --pythonpath src sportsball.main:app \
+    --log-level warning &
+SERVER_PID=$!
+trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT INT TERM
+
+# Poll the port rather than sleeping a guessed interval — a cold `uv run`
+# that has to resolve the environment takes noticeably longer than a warm one.
+attempt=0
+until curl -fsS -o /dev/null "http://127.0.0.1:${PORT}/healthz" 2>/dev/null; do
+    attempt=$((attempt + 1))
+    if [ "$attempt" -gt 60 ]; then
+        echo "Server never answered on port ${PORT}. Is it already in use?" >&2
+        echo "Set PORT=<n> to use a different one." >&2
+        exit 1
+    fi
+    sleep 0.5
+done
+
+curl -fsS -H "X-Appengine-Cron: true" "http://127.0.0.1:${PORT}/tasks/refresh"

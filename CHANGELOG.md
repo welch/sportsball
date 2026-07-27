@@ -39,6 +39,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `bin/refresh` forces the event snapshot to rebuild without waiting for
+  the 06:00 cron, and `bin/deploy --refresh` runs it once a deploy lands.
+  `/tasks/refresh` is gated on the `X-Appengine-Cron` header, which GAE
+  strips from anything off the internet — but nothing strips it locally, so
+  the script runs the app on a loopback port, sends the header itself, and
+  lets the ordinary handler do the work. This replaces the Cloud Console's
+  "Run now" button, which no longer appears for classic App Engine cron
+  jobs (they aren't mirrored into Cloud Scheduler either). Refuses to start
+  if `EVENTS_BUCKET` resolves to nothing, since the write would be a silent
+  no-op, and `--refresh` only fires after a successful deploy — a snapshot
+  written by newer code can carry fields the running version can't read.
 - Venue names in the 8-ball's event descriptions are tinted with their own
   hue, matching the day's rings — "at Oracle Park" in orange, "at Chase
   Center" in blue. Useful on days that list both. An untracked venue

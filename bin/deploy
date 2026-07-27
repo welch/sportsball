@@ -10,9 +10,30 @@
 # Bare `gcloud app deploy app.yaml` still works but assigns a timestamp
 # version ID — the health page shows that raw, which is itself a clear
 # "this wasn't deployed via bin/deploy" signal.
+#
+# Pass --refresh to run `bin/refresh` once the deploy lands, forcing the
+# event snapshot to be rebuilt instead of waiting for the 6am cron. Any
+# other arguments are handed through to `gcloud app deploy`.
 
 set -e
+SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 cd "$(dirname "$0")/.."
+
+# Pull --refresh out of the argument list, leaving the rest for gcloud.
+# Rotating through "$@" rather than rebuilding a string keeps any argument
+# that contains spaces intact.
+REFRESH=0
+remaining=$#
+while [ "$remaining" -gt 0 ]; do
+    arg="$1"
+    shift
+    if [ "$arg" = "--refresh" ]; then
+        REFRESH=1
+    else
+        set -- "$@" "$arg"
+    fi
+    remaining=$((remaining - 1))
+done
 
 TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo v0)
 SHA=$(git rev-parse --short HEAD)
@@ -23,4 +44,11 @@ if git status --porcelain | grep -q .; then
 fi
 
 echo "Deploying as version: ${ID}"
-exec gcloud app deploy app.yaml --version="$ID" "$@"
+gcloud app deploy app.yaml --version="$ID" "$@"
+
+# Only after a successful deploy — the snapshot this writes can carry
+# fields the previously-deployed code wouldn't understand.
+if [ "$REFRESH" -eq 1 ]; then
+    echo
+    exec "${SCRIPT_DIR}/refresh"
+fi

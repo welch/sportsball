@@ -164,6 +164,7 @@ If you want a custom domain, see
 
 ```sh
 bin/deploy --project=<your-project-id>           # deploys app.yaml
+bin/deploy --refresh --project=<your-project-id> # …and rebuild the snapshot
 gcloud app deploy cron.yaml --project=<your-project-id>
 ```
 
@@ -179,7 +180,21 @@ version ID — health page will display that raw, which is itself a clear
 `cron.yaml` runs `/tasks/refresh` daily at 06:00 PT, which fetches all four
 sources and writes a fresh snapshot to `EVENTS_BUCKET`. The endpoint is
 gated by the `X-Appengine-Cron` header (GAE strips this from external
-requests), so only cron can trigger it.
+requests), so nothing on the internet can trigger it — including you.
+
+To force a refresh rather than wait for 06:00, run `bin/refresh`, or pass
+`--refresh` to `bin/deploy` to do it as soon as the deploy lands. Nothing
+strips that header locally, so the script starts the app on a loopback
+port, sends the header itself, and lets the ordinary handler fetch every
+adapter and write the snapshot. Deployed instances pick it up on their next
+cold start, or when their 12-hour cache expires.
+
+Two things to know before using it. It writes the real production blob —
+the adapters run on your machine and your credentials do the write. And run
+it *after* deploying, never before: a snapshot written by newer code can
+carry fields the deployed version doesn't understand yet. `bin/deploy
+--refresh` sequences it correctly, and refuses to refresh if the deploy
+fails.
 
 `env.yaml` is bundled with the deploy automatically — `.gitignore` keeps it
 out of version control, but `.gcloudignore` does NOT exclude it, so it
