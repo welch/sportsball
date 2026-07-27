@@ -39,7 +39,7 @@
         <ul class="events">
           {% for e in status.today_events %}
             {% set local = e.starts_at | pt %}
-            <li>{{ e.name | team_colorize }} at {{ e.venue }},
+            <li>{{ e.name | team_colorize }} at {{ e.venue | venue_colorize }},
               {% if e.time_tba %}time TBA
               {% else %}<time datetime="{{ local.isoformat() }}">{{ local.strftime('%-I:%M %p') }}</time>{% endif %}
             </li>
@@ -53,7 +53,7 @@
         <ul class="events">
           {% for e in status.next_event_events %}
             {% set local = e.starts_at | pt %}
-            <li>({{ e.name | team_colorize }} at {{ e.venue }},
+            <li>({{ e.name | team_colorize }} at {{ e.venue | venue_colorize }},
               {% if e.time_tba %}time TBA
               {% else %}<time datetime="{{ local.isoformat() }}">{{ local.strftime('%-I:%M %p') }}</time>{% endif %})
             </li>

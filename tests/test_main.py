@@ -1055,6 +1055,41 @@ def test_calendar_chevrons_carry_position_classes(
     assert b'class="chev next"' in body
 
 
+def test_venue_colorize_tints_tracked_venues() -> None:
+    assert main.venue_colorize("Oracle Park") == '<span class="giants">Oracle Park</span>'
+    assert main.venue_colorize("Chase Center") == '<span class="warriors">Chase Center</span>'
+
+
+def test_venue_colorize_leaves_unknown_venues_plain() -> None:
+    """An away game that slipped the venue filter shouldn't be guessed at."""
+    assert main.venue_colorize("Dodger Stadium") == "Dodger Stadium"
+
+
+def test_venue_colorize_escapes() -> None:
+    assert main.venue_colorize("<script>") == "&lt;script&gt;"
+
+
+def test_index_colors_venue_in_today_event_list(
+    monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
+) -> None:
+    giants = _ev("Mets at Giants", "Oracle Park", "2026-05-05T02:05:00+00:00")
+    show = _ev("Some Band", "Chase Center", "2026-05-05T03:00:00+00:00", kind="event")
+    monkeypatch.setattr(main, "_events", lambda: [giants, show])
+    body = main.app.test_client().get("/").data
+    assert b'at <span class="giants">Oracle Park</span>' in body
+    assert b'at <span class="warriors">Chase Center</span>' in body
+
+
+def test_index_colors_venue_in_future_event_list(
+    monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
+) -> None:
+    future = _ev("Warriors vs Lakers", "Chase Center", "2026-05-09T02:00:00+00:00")
+    monkeypatch.setattr(main, "_events", lambda: [future])
+    body = main.app.test_client().get("/").data
+    assert b"All clear until" in body
+    assert b'at <span class="warriors">Chase Center</span>' in body
+
+
 def test_venue_rings_share_a_band_and_interleave() -> None:
     """The two dashed rings occupy one circle and must stay out of phase.
 

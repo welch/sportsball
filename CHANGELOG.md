@@ -39,6 +39,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Venue names in the 8-ball's event descriptions are tinted with their own
+  hue, matching the day's rings — "at Oracle Park" in orange, "at Chase
+  Center" in blue. Useful on days that list both. An untracked venue
+  renders plain rather than guessing at a color.
 - Monthly calendar view at `/calendar/<YYYY-MM>` (and `/calendar/` for the
   current month). Every day wears the same colored rings as the 8-ball
   halo, so a month's worth of parking misery reads at a glance — see the

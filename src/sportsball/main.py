@@ -201,6 +201,20 @@ def team_colorize(text: str) -> Markup:
     return Markup(safe)
 
 
+@app.template_filter("venue_colorize")
+def venue_colorize(venue: str) -> Markup:
+    """Tint a venue name with its own hue, same as the rings use.
+
+    An untracked venue (an away game that slipped through, a renamed
+    building) renders plain rather than guessing at a color.
+    """
+    safe = escape(venue)
+    color = VENUE_COLORS.get(venue)
+    if not color:
+        return Markup(safe)
+    return Markup('<span class="{}">{}</span>').format(color, safe)
+
+
 _cache_lock = threading.Lock()
 _cache: dict[str, Any] = {"events": None, "fetched_at": 0.0, "previously_unseen": []}
 
