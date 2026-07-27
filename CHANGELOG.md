@@ -7,13 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Day colors now answer two questions on two channels instead of conflating
+  them. Hue says *where* — orange for Oracle Park, blue for Chase Center.
+  Texture says *what* — a soft glow for a home game, a dashed ring in the
+  same hue for anything else at that venue. They compose, so a Giants game
+  plus a concert at Oracle Park draws an orange glow with an orange dash
+  through it, which the old scheme couldn't express at all. Purple retires.
+  This started as a bug: Ticketmaster files monster trucks under segment
+  "Sports", so `_to_event` handed back the same classification a Warriors
+  game got and Aug 15 drew a solid Warriors ring over a monster truck
+  rally. Segment was always the wrong thing to key on — whether a home team
+  is playing is something the *adapter* knows, so `Event.category`
+  (`sports`/`concert`, inferred from a genre string) is replaced by
+  `Event.kind` (`home`/`event`, asserted at the source). Giants and Warriors
+  adapters always say `home`; Ticketmaster says `home` only for the WNBA
+  subGenre, the one home team still arriving through that feed.
+  Snapshots written before the rename still load — a validator maps the old
+  `category` via `source` — so the hours between deploy and the next cron
+  don't send every cold start back to the adapters.
+- The dashed rings are built from a repeating conic gradient masked by a
+  radial one, rather than a `dashed` border that offered no control over
+  frequency and stamped out a hard stroke fighting the soft glows. Both
+  venues' rings share a single band and interleave: each draws across the
+  first half of every period, Chase starting half a period later so its
+  dashes land in Oracle's gaps. One venue busy reads as a dashed ring;
+  both composite into a complete ring alternating orange and blue, so the
+  density itself says "both buildings". The phase is derived from the
+  period so the 8-ball's shorter period can't desync the two.
+
 ### Added
 
 - Monthly calendar view at `/calendar/<YYYY-MM>` (and `/calendar/` for the
   current month). Every day wears the same colored rings as the 8-ball
-  halo — orange Giants, blue Chase Center sports, purple concerts, stacked
-  concentrically on days with more than one — so a month's worth of
-  parking misery reads at a glance. Chevrons step a month in either
+  halo, so a month's worth of parking misery reads at a glance — see the
+  ring scheme under Changed. Chevrons step a month in either
   direction with no bound; clicking a day drops into the 8-ball view for
   that date, and clicking the date under the 8-ball opens its month. A
   verb in the path (`/fucked/…`) survives every hop. Days spilling in from

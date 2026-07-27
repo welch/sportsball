@@ -10,6 +10,12 @@ from sportsball.models import Event
 PT = ZoneInfo("America/Los_Angeles")
 TRACKED_VENUES = frozenset({"Oracle Park", "Chase Center"})
 
+# Hue per venue — the one mapping behind every colored thing on the site:
+# day rings, the verb, and venue names in event descriptions. The class
+# names are historical (they're the team colors), but what they encode is
+# the building, not who's playing in it.
+VENUE_COLORS = {"Oracle Park": "giants", "Chase Center": "warriors"}
+
 # Calendar grids run Sunday-first, US convention.
 _CAL = _calendar.Calendar(firstweekday=6)
 WEEKDAY_LABELS = ("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat")
@@ -49,20 +55,32 @@ class MonthView:
 
 
 def day_halos(events: Iterable[Event]) -> list[str]:
-    """Halo color names for a day's events, innermost ring first.
+    """CSS marker classes for a day's events, innermost ring first.
 
-    The single source of truth for "what color is this day?" — the 8-ball's
-    halo and the calendar's day rings both read from here, so a day can
-    never be orange on one page and blue on the other. Order matters: the
-    CSS draws them in this sequence from the inside out.
+    The single source of truth for "what does this day look like?" — the
+    8-ball's halo and the calendar's day rings both read from here, so a day
+    can never be orange on one page and blue on the other.
+
+    Two channels, two questions. Hue answers *where*: orange for Oracle
+    Park, blue for Chase Center. Texture answers *what*: a soft glow
+    (`halo-*`) means the home team is playing, a dashed ring (`ring-*`)
+    means something else has the building. They compose — a Giants game and
+    a concert at Oracle Park on the same day is an orange glow with an
+    orange dashed ring through it.
+
+    Keeping venue on the hue means a third venue would cost one color
+    rather than two, and it keeps the palette inside what stays legible at
+    a 25px calendar cell.
     """
     halos = []
-    if any(e.venue == "Oracle Park" and e.category == "sports" for e in events):
-        halos.append("giants")
-    if any(e.venue == "Chase Center" and e.category == "sports" for e in events):
-        halos.append("warriors")
-    if any(e.category == "concert" for e in events):
-        halos.append("concert")
+    if any(e.venue == "Oracle Park" and e.kind == "home" for e in events):
+        halos.append("halo-giants")
+    if any(e.venue == "Oracle Park" and e.kind == "event" for e in events):
+        halos.append("ring-oracle")
+    if any(e.venue == "Chase Center" and e.kind == "home" for e in events):
+        halos.append("halo-warriors")
+    if any(e.venue == "Chase Center" and e.kind == "event" for e in events):
+        halos.append("ring-chase")
     return halos
 
 

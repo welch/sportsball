@@ -16,7 +16,7 @@ def _ev(sid: str, *, venue: str = "Oracle Park") -> Event:
         name=f"event {sid}",
         starts_at=datetime(2026, 5, 15, 19, 0, tzinfo=PT),
         venue=venue,
-        category="sports",
+        kind="home",
     )
 
 
@@ -187,3 +187,36 @@ def test_read_returns_none_on_malformed_payload(monkeypatch: pytest.MonkeyPatch)
     monkeypatch.setattr(store, "_client", lambda: fake_client)
 
     assert store.read_events() is None
+
+
+def test_legacy_snapshot_without_kind_still_loads() -> None:
+    """Blobs written before `kind` replaced `category` must still validate.
+
+    Cron rewrites the snapshot daily, so this only covers the window between
+    a deploy and the next refresh — but without it `read_events` would reject
+    the entire payload and every cold start would hit the adapters directly.
+    """
+    legacy = {
+        "source": "mlb_statsapi",
+        "source_id": "1",
+        "name": "Mets at Giants",
+        "starts_at": "2026-05-05T02:05:00+00:00",
+        "venue": "Oracle Park",
+        "category": "sports",
+    }
+    assert Event.model_validate(legacy).kind == "home"
+    # A Ticketmaster row can't be proven to be a home team, so it lands on
+    # the safe side and one cron run corrects any Valkyries games.
+    assert Event.model_validate({**legacy, "source": "ticketmaster_discovery"}).kind == "event"
+
+
+def test_current_snapshot_kind_is_not_overwritten_by_the_bridge() -> None:
+    current = {
+        "source": "ticketmaster_discovery",
+        "source_id": "2",
+        "name": "Valkyries vs whoever",
+        "starts_at": "2026-05-05T02:05:00+00:00",
+        "venue": "Chase Center",
+        "kind": "home",
+    }
+    assert Event.model_validate(current).kind == "home"

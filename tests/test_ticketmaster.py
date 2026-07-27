@@ -42,10 +42,19 @@ def test_event_fields_well_formed() -> None:
     assert e.name
     assert e.starts_at.tzinfo is not None
     assert e.venue == "Chase Center"
-    assert e.category in ("sports", "concert")
+    assert e.kind in ("home", "event")
 
 
-def test_category_derived_from_segment() -> None:
+def test_kind_derived_from_subgenre_not_segment() -> None:
+    """The monster-truck regression, pinned.
+
+    Ticketmaster files Hot Wheels Monster Trucks under segment "Sports",
+    and this adapter used to read that segment and hand back the same
+    classification a Warriors game got — so the calendar drew a solid
+    Warriors ring over a monster truck rally. Only the subGenre can tell a
+    home team from a rented building, and the WNBA Valkyries are the only
+    home team still arriving through this feed.
+    """
     payload = {
         "_embedded": {
             "events": [
@@ -83,17 +92,18 @@ def test_category_derived_from_segment() -> None:
         }
     }
     events = parse_payload(payload)
-    by_id = {e.source_id: e.category for e in events}
-    assert by_id["concert"] == "concert"
-    assert by_id["wnba"] == "sports"
-    assert by_id["racing"] == "sports"
+    by_id = {e.source_id: e.kind for e in events}
+    assert by_id["concert"] == "event"
+    assert by_id["wnba"] == "home"
+    # Segment says "Sports"; it is still not a home team.
+    assert by_id["racing"] == "event"
 
 
-def test_chase_fixture_has_mix_of_categories() -> None:
+def test_chase_fixture_has_mix_of_kinds() -> None:
     events = parse_payload(_load(CHASE))
-    cats = {e.category for e in events}
-    assert "sports" in cats  # Valkyries
-    assert "concert" in cats  # Music events
+    kinds = {e.kind for e in events}
+    assert "home" in kinds  # Valkyries
+    assert "event" in kinds  # Music events and the rest
 
 
 def test_filter_drops_explicit_subgenre() -> None:

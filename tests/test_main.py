@@ -41,14 +41,14 @@ def fixed_now(monkeypatch: pytest.MonkeyPatch) -> datetime:
     return now
 
 
-def _ev(name: str, venue: str, when_utc: str, category: str = "sports") -> Event:
+def _ev(name: str, venue: str, when_utc: str, kind: str = "home") -> Event:
     return Event(
         source="test",
         source_id=name,
         name=name,
         starts_at=datetime.fromisoformat(when_utc),
         venue=venue,
-        category=category,  # type: ignore[arg-type]
+        kind=kind,  # type: ignore[arg-type]
     )
 
 
@@ -196,7 +196,6 @@ def test_index_page_date_neutral_when_no_color(
     # No color class appended when no events / mixed.
     assert b'class="page-date giants"' not in response.data
     assert b'class="page-date warriors"' not in response.data
-    assert b'class="page-date concert"' not in response.data
 
 
 def test_index_page_date_reflects_url_isodate(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -516,81 +515,122 @@ def test_index_invalid_date_404(monkeypatch: pytest.MonkeyPatch) -> None:
     assert response.status_code == 404
 
 
-def test_index_concert_today_uses_concert_halo_and_verb(
+def test_index_non_team_event_at_chase_uses_dashed_chase_ring(
     monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
 ) -> None:
     concert = _ev(
         "Demi Lovato: It's Not That Deep Tour",
         "Chase Center",
         "2026-05-05T03:00:00+00:00",
-        category="concert",
+        kind="event",
     )
     monkeypatch.setattr(main, "_events", lambda: [concert])
     response = main.app.test_client().get("/")
-    assert b"halo-concert" in response.data
-    assert b'class="verb concert"' in response.data
-    # No team sports today → no team halos.
+    assert b"ring-chase" in response.data
+    # Hue still says Chase Center even though no home team is playing.
+    assert b'class="verb warriors"' in response.data
+    # No home game today → no solid glow anywhere.
     assert b"halo-warriors" not in response.data
     assert b"halo-giants" not in response.data
 
 
-def test_index_concert_at_oracle_park_uses_concert_halo(
+def test_index_non_team_event_at_oracle_uses_dashed_oracle_ring(
     monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
 ) -> None:
     concert = _ev(
         "Fuerza Regida",
         "Oracle Park",
         "2026-05-05T03:00:00+00:00",
-        category="concert",
+        kind="event",
     )
     monkeypatch.setattr(main, "_events", lambda: [concert])
     response = main.app.test_client().get("/")
-    assert b"halo-concert" in response.data
-    assert b'class="verb concert"' in response.data
+    assert b"ring-oracle" in response.data
+    assert b'class="verb giants"' in response.data
     assert b"halo-giants" not in response.data
+    assert b"ring-chase" not in response.data
 
 
-def test_index_valkyries_treated_as_sports(
+def test_index_monster_trucks_do_not_wear_the_warriors_glow(
+    monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
+) -> None:
+    """Ticketmaster files monster trucks under segment "Sports", which is how
+    they used to come out looking exactly like a Warriors home game."""
+    trucks = _ev(
+        "HOT WHEELS MONSTER TRUCKS LIVE  GLOW-N-FIRE",
+        "Chase Center",
+        "2026-05-05T03:00:00+00:00",
+        kind="event",
+    )
+    monkeypatch.setattr(main, "_events", lambda: [trucks])
+    response = main.app.test_client().get("/")
+    assert b"ring-chase" in response.data
+    assert b"halo-warriors" not in response.data
+
+
+def test_index_valkyries_count_as_a_home_team(
     monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
 ) -> None:
     valks = _ev(
         "Phoenix Mercury at Golden State Valkyries",
         "Chase Center",
         "2026-05-05T03:00:00+00:00",
-        category="sports",
+        kind="home",
     )
     monkeypatch.setattr(main, "_events", lambda: [valks])
     response = main.app.test_client().get("/")
     assert b"halo-warriors" in response.data
     assert b'class="verb warriors"' in response.data
     assert b'class="warriors">Golden State Valkyries</span>' in response.data
-    assert b"halo-concert" not in response.data
+    assert b"ring-chase" not in response.data
 
 
-def test_index_mixed_sports_and_concert_neutral_verb(
+def test_index_home_game_and_other_event_at_same_venue_show_both_marks(
+    monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
+) -> None:
+    """The two channels compose: a glow and a dash in the same hue."""
+    game = _ev(
+        "New York Mets at San Francisco Giants",
+        "Oracle Park",
+        "2026-05-05T02:05:00+00:00",
+        kind="home",
+    )
+    show = _ev(
+        "Noah Kahan",
+        "Oracle Park",
+        "2026-05-05T03:00:00+00:00",
+        kind="event",
+    )
+    monkeypatch.setattr(main, "_events", lambda: [game, show])
+    response = main.app.test_client().get("/")
+    assert b"halo-giants" in response.data
+    assert b"ring-oracle" in response.data
+    # One venue owns the day, so the verb still takes its color.
+    assert b'class="verb giants"' in response.data
+
+
+def test_index_both_venues_active_gives_neutral_verb(
     monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
 ) -> None:
     game = _ev(
         "New York Mets at San Francisco Giants",
         "Oracle Park",
         "2026-05-05T02:05:00+00:00",
-        category="sports",
+        kind="home",
     )
     show = _ev(
         "Some Concert",
         "Chase Center",
         "2026-05-05T03:00:00+00:00",
-        category="concert",
+        kind="event",
     )
     monkeypatch.setattr(main, "_events", lambda: [game, show])
     response = main.app.test_client().get("/")
-    # All three halos render (giants sports + concert).
     assert b"halo-giants" in response.data
-    assert b"halo-concert" in response.data
-    # Mixed kinds → no single verb color class.
+    assert b"ring-chase" in response.data
+    # Two venues → no single verb color.
     assert b'class="verb giants"' not in response.data
     assert b'class="verb warriors"' not in response.data
-    assert b'class="verb concert"' not in response.data
 
 
 def test_canonical_host_no_redirect_when_host_matches(
@@ -920,14 +960,13 @@ def test_calendar_day_wears_event_halos(
     monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
 ) -> None:
     giants = _ev("Mets at Giants", "Oracle Park", "2026-05-05T02:05:00+00:00")
-    concert = _ev("Some Band", "Chase Center", "2026-05-05T03:00:00+00:00", "concert")
+    concert = _ev("Some Band", "Chase Center", "2026-05-05T03:00:00+00:00", "event")
     monkeypatch.setattr(main, "_events", lambda: [giants, concert])
     body = main.app.test_client().get("/calendar/2026-05").data.decode()
-    # Both events land on 5/4 PT → that one cell carries both rings.
-    cell = [line for line in body.splitlines() if 'href="/2026-05-04"' in line]
-    assert cell, "no cell for 2026-05-04"
-    assert "halo-giants" in body and "halo-concert" in body
-    assert "cal-day halo-giants halo-concert" in body
+    # Both events land on 5/4 PT → that one cell carries both marks: a solid
+    # orange glow for the Giants, a dashed blue ring for the Chase show.
+    assert 'href="/2026-05-04"' in body
+    assert "cal-day halo-giants ring-chase" in body
 
 
 def test_calendar_marks_today(monkeypatch: pytest.MonkeyPatch, fixed_now: datetime) -> None:
@@ -977,3 +1016,77 @@ def test_isodate_route_still_wins_over_month_route(
     response = main.app.test_client().get("/2026-05-15")
     assert response.status_code == 200
     assert b"Friday, May 15, 2026" in response.data
+
+
+def _css_block(css: str, selector: str, after: int = 0) -> str:
+    """The body of the rule whose selector list is exactly `selector`.
+
+    Anchored on a newline so a lone `.ring-chase::after` doesn't match the
+    combined `.ring-oracle::before,\\n.ring-chase::after` rule above it.
+    """
+    start = css.index("\n" + selector + " {", after)
+    return css[start : css.index("}", start)]
+
+
+def test_calendar_nav_shares_the_day_grid_geometry() -> None:
+    """Chevrons must sit above the Sun/Sat columns so the pointer can stay
+    put while paging through months. That only holds if the nav and the day
+    grid have identical column geometry — a flex row would let a long month
+    name like "September" shove them outward.
+    """
+    css = main.app.test_client().get("/static/css/8ball.css").data.decode()
+    nav, grid = _css_block(css, ".cal-nav"), _css_block(css, ".cal-grid")
+    for prop in ("grid-template-columns: repeat(7, 1fr)", "gap: 2px"):
+        assert prop in nav, f"{prop} missing from .cal-nav"
+        assert prop in grid, f"{prop} missing from .cal-grid"
+    # The chevrons are pinned to the outer columns, and the title is boxed
+    # into the middle five so it can never push them around.
+    assert "grid-column: 1" in _css_block(css, ".chev.prev")
+    assert "grid-column: 7" in _css_block(css, ".chev.next")
+    assert "grid-column: 2 / 7" in _css_block(css, ".cal-title")
+
+
+def test_calendar_chevrons_carry_position_classes(
+    monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
+) -> None:
+    monkeypatch.setattr(main, "_events", lambda: [])
+    body = main.app.test_client().get("/calendar/2026-05").data
+    assert b'class="chev prev"' in body
+    assert b'class="chev next"' in body
+
+
+def test_venue_rings_share_a_band_and_interleave() -> None:
+    """The two dashed rings occupy one circle and must stay out of phase.
+
+    Oracle draws across the first half of each period, Chase starts half a
+    period later and lands in the gaps, so a day with events at both venues
+    composites to a complete alternating ring. Two things break that: a duty
+    cycle over 50% (the rings overlap) or a phase offset that isn't half the
+    period (they collide or leave a seam).
+    """
+    css = main.app.test_client().get("/static/css/8ball.css").data.decode()
+    shared = _css_block(css, ".ring-oracle::before,\n.ring-chase::after")
+    # One band for both — sharing the radius is the whole point.
+    assert shared.count("closest-side, transparent 78%, #000 90%, transparent 100%") == 2
+    # Dashes end by the halfway mark, leaving the back half for the other ring.
+    assert "transparent calc(var(--dash-period) * 0.5)" in shared
+    for stop in ("0.11", "0.39"):
+        assert f"calc(var(--dash-period) * {stop})" in shared
+
+    # The lone `.ring-chase::after` rule lives after the combined one, whose
+    # selector list ends with the same string.
+    past_shared = css.index(shared) + len(shared)
+    oracle = _css_block(css, ".ring-oracle::before")
+    chase = _css_block(css, ".ring-chase::after", after=past_shared)
+    assert "repeating-conic-gradient(from 0deg" in oracle
+    # Derived from the period, so overriding the period can't desync them.
+    assert "repeating-conic-gradient(from calc(var(--dash-period) / 2)" in chase
+
+
+def test_ball_overrides_only_the_dash_period() -> None:
+    """The ball needs a shorter period for its much longer circumference —
+    but it must not restate the phase, or the two would drift apart."""
+    css = main.app.test_client().get("/static/css/8ball.css").data.decode()
+    block = _css_block(css, ".ball-frame.ring-oracle::before,\n.ball-frame.ring-chase::after")
+    assert "--dash-period" in block
+    assert "conic-gradient" not in block

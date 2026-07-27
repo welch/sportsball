@@ -1,7 +1,6 @@
 :root {
     --giants-orange: #FD5A1E;
     --warriors-blue: #1D428A;
-    --concert-purple: #7E2F8E;
 }
 
 body {
@@ -37,10 +36,6 @@ h1,
 
 .warriors {
     color: var(--warriors-blue);
-}
-
-.concert {
-    color: var(--concert-purple);
 }
 
 .events {
@@ -124,15 +119,6 @@ p {
     );
 }
 
-.halo-concert {
-    background: radial-gradient(
-        circle closest-side,
-        rgba(126, 47, 142, 0) 60%,
-        rgba(126, 47, 142, 0.7) 80%,
-        rgba(126, 47, 142, 0) 100%
-    );
-}
-
 /* Two-halo days: inner ring just outside the image, outer ring at the rim. */
 .halo-giants.halo-warriors {
     background:
@@ -150,59 +136,71 @@ p {
         );
 }
 
-.halo-giants.halo-concert {
-    background:
-        radial-gradient(
-            circle closest-side,
-            rgba(253, 90, 30, 0) 60%,
-            rgba(253, 90, 30, 0.7) 73%,
-            rgba(253, 90, 30, 0) 84%
-        ),
-        radial-gradient(
-            circle closest-side,
-            rgba(126, 47, 142, 0) 82%,
-            rgba(126, 47, 142, 0.7) 92%,
-            rgba(126, 47, 142, 0) 100%
-        );
+/* Dashed rings — the second channel. The glow above says "a home game";
+ * these say "something else has the building". Same hue, so the venue still
+ * reads at a glance, but unmistakably a different mark.
+ *
+ * Built from two gradients rather than a `dashed` border, which gave no
+ * control over dash frequency and stamped out a hard-edged stroke that
+ * fought with the soft glows. A repeating conic gradient lays down the
+ * dashes — the angular ramps in each period soften their ends, so they read
+ * as drawn rather than punched — and a radial mask fades the ring in and
+ * out along its radius, giving it the same bloom the glows have. Because
+ * the period is angular, the rhythm stays proportional at any size.
+ *
+ * Both rings share one band and interleave within it. Each draws its dashes
+ * across the first half of every period and leaves the second half empty;
+ * Chase starts half a period later, so its dashes land exactly in Oracle's
+ * gaps. One venue busy reads as a dashed ring, both reads as a complete
+ * ring alternating orange and blue — the density itself says "both
+ * buildings". The duty cycle is what makes this work, so it must stay at or
+ * under 50%: push it past and the two rings start painting over each other.
+ *
+ * `currentColor` and a shared `--dashes` token stream keep one definition
+ * for both; each ring declares only its hue and its phase. The phase is
+ * derived from `--dash-period`, so overriding the period re-derives the
+ * offset and the two can't drift out of interleave.
+ *
+ * The band sits at 90% of the radius, well outside the 64% where the ball
+ * image ends — these pseudo-elements paint above it, so dashes any further
+ * in would cross the ball's face. Sharing a radius does mean the venue now
+ * reads by hue alone rather than also by position.
+ */
+.ring-oracle::before,
+.ring-chase::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    pointer-events: none;
+    --dash-period: 36deg; /* 10 dashes per ring, 20 interleaved */
+    --dashes:
+        transparent 0deg,
+        currentColor calc(var(--dash-period) * 0.11),
+        currentColor calc(var(--dash-period) * 0.39),
+        transparent calc(var(--dash-period) * 0.5),
+        transparent var(--dash-period);
+    -webkit-mask: radial-gradient(circle closest-side, transparent 78%, #000 90%, transparent 100%);
+    mask: radial-gradient(circle closest-side, transparent 78%, #000 90%, transparent 100%);
 }
 
-.halo-warriors.halo-concert {
-    background:
-        radial-gradient(
-            circle closest-side,
-            rgba(29, 66, 138, 0) 60%,
-            rgba(29, 66, 138, 0.7) 73%,
-            rgba(29, 66, 138, 0) 84%
-        ),
-        radial-gradient(
-            circle closest-side,
-            rgba(126, 47, 142, 0) 82%,
-            rgba(126, 47, 142, 0.7) 92%,
-            rgba(126, 47, 142, 0) 100%
-        );
+.ring-oracle::before {
+    color: rgba(253, 90, 30, 0.85);
+    background: repeating-conic-gradient(from 0deg, var(--dashes));
 }
 
-/* All three: orange innermost, blue middle, purple outermost. */
-.halo-giants.halo-warriors.halo-concert {
-    background:
-        radial-gradient(
-            circle closest-side,
-            rgba(253, 90, 30, 0) 60%,
-            rgba(253, 90, 30, 0.7) 68%,
-            rgba(253, 90, 30, 0) 76%
-        ),
-        radial-gradient(
-            circle closest-side,
-            rgba(29, 66, 138, 0) 75%,
-            rgba(29, 66, 138, 0.7) 84%,
-            rgba(29, 66, 138, 0) 92%
-        ),
-        radial-gradient(
-            circle closest-side,
-            rgba(126, 47, 142, 0) 91%,
-            rgba(126, 47, 142, 0.7) 96%,
-            rgba(126, 47, 142, 0) 100%
-        );
+.ring-chase::after {
+    color: rgba(29, 66, 138, 0.85);
+    /* Half a period out of phase — lands in Oracle's gaps. */
+    background: repeating-conic-gradient(from calc(var(--dash-period) / 2), var(--dashes));
+}
+
+/* The ball's circumference is ~7x a calendar cell's, so the same angular
+ * period would stretch each dash into a long arc. Shorten the period to
+ * keep the rhythm looking like the same pen. */
+.ball-frame.ring-oracle::before,
+.ball-frame.ring-chase::after {
+    --dash-period: 18deg;
 }
 
 /* Links that shouldn't announce themselves as links — the 8-ball's date and
@@ -219,26 +217,47 @@ a.plain:active {
 
 /* Calendar ------------------------------------------------------------- */
 
+/* The nav shares the day grid's exact column geometry so the chevrons sit
+ * dead above the Sun and Sat columns. That's the whole point: their position
+ * can't depend on how wide the month name is, or the pointer would have to
+ * chase them from "May" to "September" while paging through the year.
+ */
 .cal-nav {
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 2px;
     align-items: center;
-    justify-content: center;
-    gap: 0.6em;
     margin: 0.4em 0 0.6em;
 }
 
 .cal-title {
+    grid-column: 2 / 7;
+    text-align: center;
     font-size: 34px;
-    min-width: 6.5em;
 }
 
 .chev {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    justify-self: center;
+    /* Same hit-circle as a day's `.cal-num`, clamped so it can never spill
+     * its column on a narrow screen. */
+    aspect-ratio: 1;
+    width: min(1.7em, 100%);
     font-size: 44px;
     line-height: 1;
     text-decoration: none;
     color: #000;
-    padding: 0 0.25em;
-    border-radius: 8px;
+    border-radius: 50%;
+}
+
+.chev.prev {
+    grid-column: 1;
+}
+
+.chev.next {
+    grid-column: 7;
 }
 
 .chev:visited,
@@ -247,7 +266,7 @@ a.plain:active {
 }
 
 .chev:hover {
-    background: rgba(0, 0, 0, 0.07);
+    background: rgba(0, 0, 0, 0.08);
 }
 
 .cal-grid {
@@ -268,6 +287,7 @@ a.plain:active {
  * `closest-side` measures a true radius and the rings stay circular.
  */
 .cal-day {
+    position: relative; /* anchors the dashed-ring pseudo-elements */
     display: flex;
     align-items: center;
     justify-content: center;
@@ -311,10 +331,40 @@ a.plain:active {
     color: #666;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     margin-top: 1.4em;
+    line-height: 2;
 }
 
-.cal-legend span {
+.cal-legend .dot {
     font-size: 15px;
+}
+
+/* Miniatures of the two ring textures, so the legend shows the mark rather
+ * than only naming it. */
+.cal-legend .swatch {
+    display: inline-block;
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    vertical-align: -3px;
+    margin-right: 1px;
+}
+
+.cal-legend .swatch.solid {
+    background: radial-gradient(
+        circle closest-side,
+        rgba(120, 120, 120, 0) 20%,
+        rgba(120, 120, 120, 0.75) 65%,
+        rgba(120, 120, 120, 0) 100%
+    );
+}
+
+.cal-legend .swatch.dashed {
+    border: 2px dashed #888;
+}
+
+.legend-sep {
+    margin: 0 0.5em;
+    color: #ccc;
 }
 
 footer {
@@ -359,7 +409,7 @@ footer a:active {
         font-size: 26px;
     }
     .chev {
-        font-size: 36px;
+        font-size: 30px;
     }
     .cal-day {
         font-size: 17px;

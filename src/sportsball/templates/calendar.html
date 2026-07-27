@@ -21,10 +21,10 @@
       <h1><a class="plain" href="{{ home_url }}">Is my month <span class="verb">{{ verb }}?</span></a></h1>
 
       <nav class="cal-nav">
-        <a class="chev" href="{{ prev_url }}" rel="prev"
+        <a class="chev prev" href="{{ prev_url }}" rel="prev"
            aria-label="Go to {{ prev_label }}">&lsaquo;</a>
         <span class="cal-title">{{ month_label }}</span>
-        <a class="chev" href="{{ next_url }}" rel="next"
+        <a class="chev next" href="{{ next_url }}" rel="next"
            aria-label="Go to {{ next_label }}">&rsaquo;</a>
       </nav>
 
@@ -36,7 +36,7 @@
         {% for week in view.weeks %}
           {% for cell in week %}
             {% set count = cell.events | length %}
-            <a class="cal-day{% for h in cell.halos %} halo-{{ h }}{% endfor %}{% if not cell.in_month %} outside{% endif %}{% if cell.is_today %} is-today{% endif %}"
+            <a class="cal-day{% for h in cell.halos %} {{ h }}{% endfor %}{% if not cell.in_month %} outside{% endif %}{% if cell.is_today %} is-today{% endif %}"
                href="{{ day_url(cell.day) }}"
                aria-label="{{ cell.day.strftime('%A, %B %-d, %Y') }} — {{ count }} event{{ '' if count == 1 else 's' }}"
                {% if count %}title="{% for e in cell.events %}{{ e.name }} at {{ e.venue }}{{ '' if loop.last else '\n' }}{% endfor %}"{% endif %}>
@@ -47,9 +47,13 @@
       </div>
 
       <p class="cal-legend">
-        <span class="giants">&#9679;</span> Giants
-        <span class="warriors">&#9679;</span> Warriors &amp; Valkyries
-        <span class="concert">&#9679;</span> concerts
+        <span class="dot giants">&#9679;</span> Oracle Park
+        <span class="legend-sep">|</span>
+        <span class="dot warriors">&#9679;</span> Chase Center
+        <br>
+        <span class="swatch solid"></span> a home game
+        <span class="legend-sep">|</span>
+        <span class="swatch dashed"></span> anything else
       </p>
     </main>
     {% if last_updated %}

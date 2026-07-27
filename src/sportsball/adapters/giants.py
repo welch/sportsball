@@ -59,4 +59,7 @@ def _game_to_event(game: dict[str, Any]) -> Event:
         name=f"{away} at {home}",
         starts_at=datetime.fromisoformat(game["gameDate"].replace("Z", "+00:00")),
         venue=game.get("venue", {}).get("name", ""),
+        # This adapter only ever returns Giants games, home and away. The
+        # away ones get filtered out by venue downstream.
+        kind="home",
     )

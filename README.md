@@ -45,11 +45,21 @@ URL patterns:
 | `/<verb>/calendar/2026-12` | Both |
 | `/health/<token>` | Operator status page (token-gated, 404s on mismatch) |
 
-The calendar rings each day in the same colors the 8-ball halo uses — orange
-for the Giants, blue for Chase Center sports, purple for concerts, stacked
-concentrically when a day has more than one. Clicking the date under the
-8-ball opens that month; clicking a day in the calendar goes back to the
-8-ball for that date. A verb in the path is carried across both hops.
+The calendar rings each day exactly the way the 8-ball halo does, on two
+channels. Hue says **where**: orange for Oracle Park, blue for Chase Center.
+Texture says **what**: a soft glow marks a home game, a dashed ring means
+something else has the building — a concert, a monster truck
+rally, a college doubleheader. They compose, so a Giants game and a concert
+at Oracle Park on the same day is an orange glow with an orange dash through
+it.
+
+Keeping venue on the hue is deliberate: a third venue would cost one color
+instead of two, and four hues stop being distinguishable at the size of a
+calendar cell.
+
+Clicking the date under the 8-ball opens that month; clicking a day in the
+calendar goes back to the 8-ball for that date. A verb in the path is
+carried across both hops.
 
 ## Run your own
 

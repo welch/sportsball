@@ -19,9 +19,16 @@ VENUE_TZ = ZoneInfo("America/Los_Angeles")
 ORACLE_PARK_VENUE_ID = "KovZpZAJF7EA"
 CHASE_CENTER_VENUE_ID = "KovZ917Ah1H"
 
-# subGenres handled by team adapters (MLB Stats API for Giants, NBA CDN for
+# subGenres handled by team adapters (MLB Stats API for Giants, ESPN for
 # Warriors). WNBA Valkyries is a different subGenre so it stays.
 SKIP_SUBGENRES = frozenset({"MLB", "NBA"})
+
+# The only home team this feed still supplies — the Giants and Warriors
+# arrive via their own adapters. Everything else Ticketmaster lists at a
+# tracked venue is an "event", whatever segment it files under: monster
+# trucks and college basketball come through classified as "Sports", which
+# is precisely why segment is the wrong thing to key on.
+HOME_SUBGENRES = frozenset({"WNBA"})
 
 PAGE_SIZE = 100
 TIMEOUT_SECONDS = 30
@@ -99,8 +106,9 @@ def _to_event(raw: dict[str, Any]) -> Event | None:
         return None
     starts_at, time_tba = start
     venues = (raw.get("_embedded") or {}).get("venues") or []
-    is_sports = any(
-        ((c.get("segment") or {}).get("name") == "Sports") for c in raw.get("classifications") or []
+    is_home = any(
+        ((c.get("subGenre") or {}).get("name") in HOME_SUBGENRES)
+        for c in raw.get("classifications") or []
     )
     return Event(
         source=SOURCE,
@@ -108,7 +116,7 @@ def _to_event(raw: dict[str, Any]) -> Event | None:
         name=raw["name"],
         starts_at=starts_at,
         venue=venues[0]["name"] if venues else "",
-        category="sports" if is_sports else "concert",
+        kind="home" if is_home else "event",
         time_tba=time_tba,
     )
 

@@ -19,6 +19,7 @@ from sportsball import stats, store
 from sportsball.adapters import giants, ticketmaster, warriors
 from sportsball.aggregator import (
     PT,
+    VENUE_COLORS,
     WEEKDAY_LABELS,
     compute_status,
     day_halos,
@@ -259,18 +260,18 @@ def _format_day_label(d: date, today: date) -> str:
 
 
 def _verb_color_class(today_events: list[Event]) -> str:
+    """Color the verb when one venue owns the day, neutral when both do.
+
+    Venue, not team — a concert at Oracle Park colors the verb orange for
+    the same reason it draws an orange ring: what wrecks your day is which
+    neighborhood fills up, not who's playing.
+    """
     if not today_events:
         return ""
-    categories = {e.category for e in today_events}
-    if categories == {"concert"}:
-        return "concert"
-    if categories == {"sports"}:
-        venues = {e.venue for e in today_events}
-        if venues == {"Oracle Park"}:
-            return "giants"
-        if venues == {"Chase Center"}:
-            return "warriors"
-    return ""
+    venues = {e.venue for e in today_events}
+    if len(venues) != 1:
+        return ""
+    return VENUE_COLORS.get(next(iter(venues)), "")
 
 
 def _nav_urls(verb: str | None) -> Any:
@@ -313,19 +314,14 @@ def index(verb: str | None = None, isodate: date | None = None) -> str:
     next_event_label = (
         _format_day_label(status.next_event_date, status.today) if status.next_event_date else None
     )
-    # Halo only reflects today's events — future-event days draw a bare ball.
-    # Halo color follows category + venue:
-    #   sports at Oracle Park → giants halo (orange)
-    #   sports at Chase Center → warriors halo (blue) (also covers Valkyries)
-    #   concert at either venue → concert halo (purple)
+    # Rings only reflect today's events — future-event days draw a bare ball.
+    # See `aggregator.day_halos` for what the colors and textures mean.
     return render_template(
         "8ball.html",
         verb=verb,
         fucked=bool(status.today_events),
         status=status,
-        giants_active="giants" in halos,
-        warriors_active="warriors" in halos,
-        concert_active="concert" in halos,
+        halos=halos,
         verb_class=_verb_color_class(status.today_events),
         quiet_label=quiet_label,
         next_event_label=next_event_label,

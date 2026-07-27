@@ -140,7 +140,7 @@
             <th>Date (PT)</th>
             <th>Time</th>
             <th>Venue</th>
-            <th>Category</th>
+            <th>Kind</th>
             <th>Name</th>
             <th class="adapter-name">Source</th>
           </tr>
@@ -152,7 +152,7 @@
               <td><time datetime="{{ local.isoformat() }}">{{ local.strftime('%a %b %-d, %Y') }}</time></td>
               <td>{% if e.time_tba %}TBA{% else %}{{ local.strftime('%-I:%M %p') }}{% endif %}</td>
               <td>{{ e.venue }}</td>
-              <td>{{ e.category }}</td>
+              <td>{{ e.kind }}</td>
               <td>{{ e.name }}</td>
               <td class="adapter-name muted">{{ e.source }}</td>
             </tr>

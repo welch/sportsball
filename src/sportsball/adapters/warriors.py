@@ -62,4 +62,6 @@ def _game_to_event(game: dict[str, Any]) -> Event:
         name=game["name"],
         starts_at=datetime.fromisoformat(game["date"].replace("Z", "+00:00")),
         venue=competition.get("venue", {}).get("fullName", ""),
+        # Warriors schedule only; away games are filtered out by venue.
+        kind="home",
     )
