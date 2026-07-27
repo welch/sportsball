@@ -41,6 +41,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Ticketmaster adapters no longer die on events with no announced start
+  time. Discovery omits `dates.start.dateTime` entirely when `timeTBA` is
+  set, and `_to_event` reached straight for that key — so a single
+  time-TBA event (a Dec 20 college basketball doubleheader, listed Jul 16)
+  raised `KeyError: 'dateTime'` and took down all 29 Chase Center events
+  with it. Such events now fall back to midnight venue-local on their
+  announced `localDate`, which lands them on the right day, and carry a
+  new `Event.time_tba` flag so the 8-ball and health pages print "time
+  TBA" instead of a fictitious 12:00 AM. An entry with neither
+  `dateTime` nor `localDate` (`dateTBD`) is logged and skipped rather
+  than crashing the run.
 - Warriors adapter unblocked from Akamai's WAF in front of `cdn.nba.com`.
   The endpoint started 403'ing requests that didn't look like real
   nba.com-fetched XHRs. Adding browser-context headers (Chrome-shaped

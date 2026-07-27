@@ -150,7 +150,7 @@
             {% set local = e.starts_at.astimezone(pt) %}
             <tr>
               <td><time datetime="{{ local.isoformat() }}">{{ local.strftime('%a %b %-d, %Y') }}</time></td>
-              <td>{{ local.strftime('%-I:%M %p') }}</td>
+              <td>{% if e.time_tba %}TBA{% else %}{{ local.strftime('%-I:%M %p') }}{% endif %}</td>
               <td>{{ e.venue }}</td>
               <td>{{ e.category }}</td>
               <td>{{ e.name }}</td>

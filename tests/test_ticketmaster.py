@@ -1,7 +1,9 @@
 import json
+from datetime import date
 from pathlib import Path
 
 from sportsball.adapters.ticketmaster import parse_payload
+from sportsball.aggregator import PT
 
 FIXTURES = Path(__file__).parent / "fixtures"
 ORACLE = FIXTURES / "ticketmaster_oracle_park.json"
@@ -136,3 +138,89 @@ def test_filter_drops_explicit_subgenre() -> None:
 def test_empty_payload() -> None:
     assert parse_payload({}) == []
     assert parse_payload({"_embedded": {"events": []}}) == []
+
+
+def test_time_tba_event_falls_back_to_local_date() -> None:
+    """Ticketmaster omits `dateTime` when the start time isn't announced.
+
+    The event still has a known local date and still fills the venue, so it
+    has to survive parsing — one of these took the whole Chase Center
+    adapter down with a KeyError.
+    """
+    payload = {
+        "_embedded": {
+            "events": [
+                {
+                    "id": "tba",
+                    "name": "Womens Classic",
+                    "dates": {
+                        "start": {
+                            "localDate": "2026-12-20",
+                            "dateTBD": False,
+                            "dateTBA": False,
+                            "timeTBA": True,
+                            "noSpecificTime": True,
+                        }
+                    },
+                    "classifications": [
+                        {"segment": {"name": "Sports"}, "subGenre": {"name": "NCAA Basketball"}}
+                    ],
+                    "_embedded": {"venues": [{"name": "Chase Center"}]},
+                },
+            ]
+        }
+    }
+    events = parse_payload(payload)
+    assert len(events) == 1
+    e = events[0]
+    assert e.time_tba is True
+    # Midnight PT on the announced local date, so day-grouping puts it on
+    # 2026-12-20 rather than sliding into the 19th or 21st.
+    local = e.starts_at.astimezone(PT)
+    assert local.date() == date(2026, 12, 20)
+    assert (local.hour, local.minute) == (0, 0)
+
+
+def test_dated_event_is_not_flagged_tba() -> None:
+    payload = {
+        "_embedded": {
+            "events": [
+                {
+                    "id": "dated",
+                    "name": "Has a time",
+                    "dates": {"start": {"dateTime": "2026-05-15T19:00:00Z"}},
+                    "classifications": [{"subGenre": {"name": "Pop"}}],
+                    "_embedded": {"venues": [{"name": "Chase Center"}]},
+                },
+            ]
+        }
+    }
+    (e,) = parse_payload(payload)
+    assert e.time_tba is False
+
+
+def test_undated_event_is_dropped() -> None:
+    """No dateTime and no localDate — nothing to hang a day on, so skip it
+    rather than invent one."""
+    payload = {
+        "_embedded": {
+            "events": [
+                {
+                    "id": "no-date",
+                    "name": "Someday",
+                    "dates": {"start": {"dateTBD": True}},
+                    "classifications": [{"subGenre": {"name": "Pop"}}],
+                    "_embedded": {"venues": [{"name": "Chase Center"}]},
+                },
+                {
+                    "id": "keeper",
+                    "name": "Real event",
+                    "dates": {"start": {"dateTime": "2026-05-15T19:00:00Z"}},
+                    "classifications": [{"subGenre": {"name": "Pop"}}],
+                    "_embedded": {"venues": [{"name": "Chase Center"}]},
+                },
+            ]
+        }
+    }
+    events = parse_payload(payload)
+    assert {e.source_id for e in events} == {"keeper"}

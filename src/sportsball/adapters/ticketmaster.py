@@ -1,13 +1,20 @@
+import logging
 import os
 from datetime import datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import requests
 
 from sportsball.models import Event
 
+log = logging.getLogger(__name__)
+
 API_URL = "https://app.ticketmaster.com/discovery/v2/events.json"
 SOURCE = "ticketmaster_discovery"
+
+# Both tracked venues are in SF; `localDate` is venue-local by definition.
+VENUE_TZ = ZoneInfo("America/Los_Angeles")
 
 ORACLE_PARK_VENUE_ID = "KovZpZAJF7EA"
 CHASE_CENTER_VENUE_ID = "KovZ917Ah1H"
@@ -66,11 +73,14 @@ def _fetch_venue(venue_id: str) -> list[Event]:
 
 
 def parse_payload(payload: dict[str, Any]) -> list[Event]:
-    return [
-        _to_event(raw)
-        for raw in payload.get("_embedded", {}).get("events", [])
-        if not _should_skip(raw)
-    ]
+    events = []
+    for raw in payload.get("_embedded", {}).get("events", []):
+        if _should_skip(raw):
+            continue
+        event = _to_event(raw)
+        if event is not None:
+            events.append(event)
+    return events
 
 
 def _should_skip(raw: dict[str, Any]) -> bool:
@@ -81,7 +91,13 @@ def _should_skip(raw: dict[str, Any]) -> bool:
     return False
 
 
-def _to_event(raw: dict[str, Any]) -> Event:
+def _to_event(raw: dict[str, Any]) -> Event | None:
+    """Build an Event, or None if the entry has no usable start date."""
+    start = _start(raw.get("dates", {}).get("start") or {})
+    if start is None:
+        log.warning("skipping ticketmaster event %s: no usable start date", raw.get("id"))
+        return None
+    starts_at, time_tba = start
     venues = (raw.get("_embedded") or {}).get("venues") or []
     is_sports = any(
         ((c.get("segment") or {}).get("name") == "Sports") for c in raw.get("classifications") or []
@@ -90,7 +106,26 @@ def _to_event(raw: dict[str, Any]) -> Event:
         source=SOURCE,
         source_id=raw["id"],
         name=raw["name"],
-        starts_at=datetime.fromisoformat(raw["dates"]["start"]["dateTime"].replace("Z", "+00:00")),
+        starts_at=starts_at,
         venue=venues[0]["name"] if venues else "",
         category="sports" if is_sports else "concert",
+        time_tba=time_tba,
     )
+
+
+def _start(start: dict[str, Any]) -> tuple[datetime, bool] | None:
+    """Resolve a start block to ``(starts_at, time_tba)``.
+
+    Ticketmaster drops `dateTime` entirely when the start time hasn't been
+    announced (`timeTBA`/`noSpecificTime`), leaving only `localDate`. Those
+    events still fill the venue, so we keep them at midnight venue-local —
+    enough to land them on the right day — and flag the time as unknown so
+    nothing renders a fictitious clock time. An entry with neither field
+    (`dateTBD`) can't be placed on any day at all, so it's dropped.
+    """
+    if dt := start.get("dateTime"):
+        return datetime.fromisoformat(dt.replace("Z", "+00:00")), False
+    if local_date := start.get("localDate"):
+        midnight = datetime.fromisoformat(local_date).replace(tzinfo=VENUE_TZ)
+        return midnight, True
+    return None
