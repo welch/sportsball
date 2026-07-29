@@ -69,6 +69,7 @@ env_variables:
   VERB: <default-verb>           # optional
   CANONICAL_HOST: <your-host>    # optional
   EVENTS_BUCKET: <bucket-name>   # optional
+  REPO_URL: <your-repo-url>      # optional
 ```
 
 Variables:
@@ -97,6 +98,15 @@ Variables:
   App Engine default service account already has write access. Without
   this, `_events()` falls back to fetching adapters directly on every cold
   start.
+- `REPO_URL` — optional. Base URL of *your* copy of the source, e.g.
+  `https://github.com/you/sportsball` (no trailing slash needed). The health
+  page turns the running build string into a link to the exact commit it was
+  deployed from, `$REPO_URL/commit/<sha>`, using the SHA `bin/deploy` encodes
+  into the GAE version ID. It lives here rather than as a constant in the
+  source precisely so a fork points at its own repo: leave it unset and the
+  build string renders plain, which is the right answer for a deploy whose
+  source isn't public. Not a secret — it shares this file only because this
+  file is where configuration lives.
 
 ### First-time GCP setup
 

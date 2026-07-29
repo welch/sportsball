@@ -39,6 +39,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The health page's header line now links both of its facts to their own
+  evidence. The build string points at the commit it was built from —
+  `bin/deploy` already encoded the short SHA into the GAE version ID, so
+  `v0.5.0+008a635` becomes a link to `$REPO_URL/commit/008a635`. A dirty
+  deploy still links its commit, since "(dirty)" is what says the running
+  code isn't exactly that tree; an ID that carries no SHA (timestamp-style,
+  or local dev) falls back to the repo root. The "as of" timestamp links to
+  the day page for that date, so a health check is one click from what the
+  site was actually saying at the time.
+- `REPO_URL` joins the `env.yaml` settings. It isn't secret, and it's
+  configuration rather than a constant for one reason: a fork should link
+  its own source, not this repo's. Unset, the build string renders plain —
+  the right answer for a deploy whose source isn't public.
+
 - `bin/refresh` forces the event snapshot to rebuild without waiting for
   the 06:00 cron, and `bin/deploy --refresh` runs it once a deploy lands.
   `/tasks/refresh` is gated on the `X-Appengine-Cron` header, which GAE

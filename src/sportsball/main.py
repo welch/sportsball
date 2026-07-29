@@ -7,7 +7,7 @@ import time
 from datetime import date, datetime
 from datetime import time as dtime
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 import yaml
 from flask import Flask, abort, redirect, render_template, request, url_for
@@ -385,30 +385,64 @@ def _last_updated_label() -> str | None:
     return datetime.fromtimestamp(ts, tz=PT).strftime("%a %b %-d, %-I:%M %p %Z")
 
 
-def _format_version() -> str:
-    """Pretty-print the current GAE version ID for the health page.
+class VersionInfo(NamedTuple):
+    """A rendered version string plus where it points, if anywhere.
+
+    `url` is the commit page when we know both the repo and a SHA, the
+    repo root when we know only the repo, and None when `$REPO_URL` is
+    unset — a fork that hasn't pointed this at its own repo shows a plain
+    build string rather than linking the operator into someone else's
+    source.
+    """
+
+    label: str
+    url: str | None
+
+
+def _repo_url() -> str:
+    """Base URL of the source repo, from `$REPO_URL`; "" when unconfigured.
+
+    Read per call rather than frozen into a module constant: `env.yaml`
+    is loaded at import (`_load_env_yaml`), and a constant defined above
+    that call would capture the environment before it lands.
+    """
+    return os.environ.get("REPO_URL", "").rstrip("/")
+
+
+def _version_info() -> VersionInfo:
+    """Describe the running build for the health page.
 
     `bin/deploy` encodes git state into the version ID as
     `<tag>-<sha>` for clean trees and `<tag>-<sha>-dirty` for dirty ones,
     with dots in the tag mangled to hyphens. Convert back to a readable
-    form like `v0.4.0+dc9473a` (or with " (dirty)" appended). If the
-    instance was deployed without `bin/deploy` (timestamp-style ID) or
-    we're in local dev (env var unset), fall back gracefully.
+    form like `v0.4.0+dc9473a` (or with " (dirty)" appended), and point the
+    label at that commit in `$REPO_URL`. If the instance was deployed
+    without `bin/deploy` (timestamp-style ID) or we're in local dev (env
+    var unset), fall back gracefully to the raw ID and the repo root.
+
+    A dirty deploy still links its commit: the running code isn't exactly
+    that tree, which is what the "(dirty)" marker is there to say.
     """
+    repo = _repo_url()
     raw = os.environ.get("GAE_VERSION")
     if not raw:
-        return "(local — GAE_VERSION not set)"
+        return VersionInfo("(local — GAE_VERSION not set)", repo or None)
     parts = raw.split("-")
     if len(parts) >= 3 and parts[-1] == "dirty":
         tag = ".".join(parts[:-2])
         sha = parts[-2]
-        return f"{tag}+{sha} (dirty)"
+        return VersionInfo(f"{tag}+{sha} (dirty)", _commit_url(repo, sha))
     if len(parts) >= 2 and _looks_like_short_sha(parts[-1]):
         tag = ".".join(parts[:-1])
         sha = parts[-1]
-        return f"{tag}+{sha}"
-    # Auto-generated timestamp ID — return raw so the operator sees it.
-    return raw
+        return VersionInfo(f"{tag}+{sha}", _commit_url(repo, sha))
+    # Auto-generated timestamp ID — show it raw so the operator sees it.
+    return VersionInfo(raw, repo or None)
+
+
+def _commit_url(repo: str, sha: str) -> str | None:
+    """GitHub-style commit permalink, or None when there's no repo to point at."""
+    return f"{repo}/commit/{sha}" if repo else None
 
 
 def _looks_like_short_sha(s: str) -> bool:
@@ -481,10 +515,16 @@ def health(token: str) -> str:
         cache_age_label = _humanize_age((now - cache_fetched_at).total_seconds())
     cached_events = _cache["events"] or []
     new_events = sorted(_cache["previously_unseen"] or [], key=lambda e: e.starts_at)
+    version = _version_info()
     return render_template(
         "health.html",
         now=now,
-        version_label=_format_version(),
+        # The header's two facts both link out to their own evidence: the
+        # timestamp to what the site was saying that day, the build to the
+        # commit it was built from.
+        now_url=url_for("index", isodate=now.date()),
+        version_label=version.label,
+        version_url=version.url,
         adapters=stats.adapter_stats(ADAPTER_NAMES),
         request_summary=stats.request_summary(),
         cache_event_count=len(cached_events),

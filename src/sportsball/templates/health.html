@@ -29,8 +29,13 @@
   </head>
   <body>
     <h1>sportsball health</h1>
-    <p class="meta">as of <time datetime="{{ now.isoformat() }}">{{ now.strftime('%a %b %-d, %-I:%M:%S %p %Z') }}</time>
-       · running <code>{{ version_label }}</code></p>
+    <p class="meta">as of <a href="{{ now_url }}"><time datetime="{{ now.isoformat() }}">{{ now.strftime('%a %b %-d, %-I:%M:%S %p %Z') }}</time></a>
+       · running
+       {%- if version_url %}
+         <a href="{{ version_url }}" target="_blank" rel="noopener"><code>{{ version_label }}</code></a>
+       {%- else %}
+         <code>{{ version_label }}</code>
+       {%- endif %}</p>
 
     <h2>Adapters</h2>
     <table>

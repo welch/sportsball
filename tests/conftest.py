@@ -17,5 +17,5 @@ import pytest
 
 @pytest.fixture(autouse=True)
 def _isolate_env_from_local_yaml(monkeypatch: pytest.MonkeyPatch) -> None:
-    for key in ("CANONICAL_HOST", "HEALTH_TOKEN", "VERB", "EVENTS_BUCKET"):
+    for key in ("CANONICAL_HOST", "HEALTH_TOKEN", "VERB", "EVENTS_BUCKET", "REPO_URL"):
         monkeypatch.delenv(key, raising=False)

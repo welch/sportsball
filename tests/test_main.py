@@ -16,6 +16,19 @@ def _reset_stats() -> None:
 
 
 @pytest.fixture(autouse=True)
+def _no_live_adapter_fetches(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Nothing in this suite should reach MLB/NBA/Ticketmaster over the wire.
+
+    Both `_events()` (on a storage miss) and `/tasks/refresh` call
+    `fetch_all(_adapters())` for real, so any test that reaches either path
+    without stubbing it makes live HTTP calls — slow, and dependent on
+    somebody else's uptime. Tests that care about the fetch result override
+    this with their own `monkeypatch.setattr(main, "fetch_all", ...)`.
+    """
+    monkeypatch.setattr(main, "fetch_all", lambda adapters: [])
+
+
+@pytest.fixture(autouse=True)
 def _stub_cloud_logging_query(monkeypatch: pytest.MonkeyPatch) -> None:
     """Tests hitting `/health/<token>` would otherwise reach Cloud Logging
     via `stats.request_summary()`. Stub at the function level so the health
@@ -669,34 +682,67 @@ def test_canonical_host_does_not_redirect_healthz(monkeypatch: pytest.MonkeyPatc
     assert response.data == b"ok"
 
 
-def test_format_version_unset_env() -> None:
-    assert "local" in main._format_version().lower()
+REPO = "https://github.com/example/sportsball"
 
 
-def test_format_version_pretty_prints_clean_bin_deploy_id(
-    monkeypatch: pytest.MonkeyPatch,
+@pytest.fixture
+def repo_url(monkeypatch: pytest.MonkeyPatch) -> str:
+    monkeypatch.setenv("REPO_URL", REPO)
+    return REPO
+
+
+def test_version_info_unset_env(repo_url: str) -> None:
+    version = main._version_info()
+    assert "local" in version.label.lower()
+    assert version.url == REPO
+
+
+def test_version_info_pretty_prints_clean_bin_deploy_id(
+    monkeypatch: pytest.MonkeyPatch, repo_url: str
 ) -> None:
     """Clean trees → no `-clean` suffix; just <tag>-<sha>."""
     monkeypatch.setenv("GAE_VERSION", "v0-4-0-dc9473a")
-    assert main._format_version() == "v0.4.0+dc9473a"
+    assert main._version_info() == ("v0.4.0+dc9473a", f"{REPO}/commit/dc9473a")
 
 
-def test_format_version_marks_dirty(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_version_info_marks_dirty(monkeypatch: pytest.MonkeyPatch, repo_url: str) -> None:
+    """The SHA still links its commit — "(dirty)" is what says the running
+    code isn't exactly that tree."""
     monkeypatch.setenv("GAE_VERSION", "v0-4-0-dc9473a-dirty")
-    assert main._format_version() == "v0.4.0+dc9473a (dirty)"
+    assert main._version_info() == ("v0.4.0+dc9473a (dirty)", f"{REPO}/commit/dc9473a")
 
 
-def test_format_version_falls_back_on_timestamp_id(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_version_info_falls_back_on_timestamp_id(
+    monkeypatch: pytest.MonkeyPatch, repo_url: str
+) -> None:
     """Bare `gcloud app deploy` (no bin/deploy) gives a timestamp-shaped ID
-    that can't be parsed; show it raw so the operator notices."""
+    that can't be parsed; show it raw so the operator notices, and link the
+    repo root since there's no commit to point at."""
     monkeypatch.setenv("GAE_VERSION", "20260507t170000")
-    assert main._format_version() == "20260507t170000"
+    assert main._version_info() == ("20260507t170000", REPO)
 
 
-def test_format_version_falls_back_on_unparseable(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_version_info_falls_back_on_unparseable(
+    monkeypatch: pytest.MonkeyPatch, repo_url: str
+) -> None:
     """Anything that doesn't end in a short-SHA-shaped trailing part shows raw."""
     monkeypatch.setenv("GAE_VERSION", "manual-deploy")
-    assert main._format_version() == "manual-deploy"
+    assert main._version_info() == ("manual-deploy", REPO)
+
+
+def test_version_info_tolerates_trailing_slash(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A copy-pasted repo URL often carries a trailing slash; don't emit `//commit`."""
+    monkeypatch.setenv("REPO_URL", f"{REPO}/")
+    monkeypatch.setenv("GAE_VERSION", "v0-4-0-dc9473a")
+    assert main._version_info().url == f"{REPO}/commit/dc9473a"
+
+
+def test_version_info_unlinked_when_repo_url_unset(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A fork that hasn't configured REPO_URL shows the build string plain
+    rather than linking the operator into someone else's source."""
+    monkeypatch.delenv("REPO_URL", raising=False)
+    monkeypatch.setenv("GAE_VERSION", "v0-4-0-dc9473a")
+    assert main._version_info() == ("v0.4.0+dc9473a", None)
 
 
 def test_health_loads_adapter_stats_from_storage_on_fresh_instance(
@@ -741,6 +787,35 @@ def test_health_page_renders_version_label(monkeypatch: pytest.MonkeyPatch) -> N
     response = main.app.test_client().get("/health/secret")
     assert response.status_code == 200
     assert b"v0.4.0+dc9473a" in response.data
+
+
+def test_health_page_links_version_to_its_commit(
+    monkeypatch: pytest.MonkeyPatch, repo_url: str
+) -> None:
+    monkeypatch.setenv("HEALTH_TOKEN", "secret")
+    monkeypatch.setenv("GAE_VERSION", "v0-4-0-dc9473a")
+    response = main.app.test_client().get("/health/secret")
+    assert f'href="{REPO}/commit/dc9473a"' in response.data.decode()
+
+
+def test_health_page_renders_version_unlinked_without_repo_url(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("REPO_URL", raising=False)
+    monkeypatch.setenv("HEALTH_TOKEN", "secret")
+    monkeypatch.setenv("GAE_VERSION", "v0-4-0-dc9473a")
+    body = main.app.test_client().get("/health/secret").data.decode()
+    assert "<code>v0.4.0+dc9473a</code>" in body
+    assert "/commit/dc9473a" not in body
+
+
+def test_health_page_links_timestamp_to_that_days_page(
+    monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
+) -> None:
+    """The "as of" stamp is a way back to what the site was saying that day."""
+    monkeypatch.setenv("HEALTH_TOKEN", "secret")
+    response = main.app.test_client().get("/health/secret")
+    assert 'href="/2026-05-04"' in response.data.decode()
 
 
 def test_canonical_host_does_not_redirect_localhost(
