@@ -6,6 +6,7 @@ from zoneinfo import ZoneInfo
 
 import requests
 
+from sportsball import __version__
 from sportsball.models import Event
 
 log = logging.getLogger(__name__)
@@ -37,8 +38,11 @@ TIMEOUT_SECONDS = 30
 # Ticketmaster's API gateway ever decides to filter unidentified clients,
 # and is good hygiene — the API key already authenticates us, no need to
 # masquerade as a browser. Accept header narrows the response format.
+#
+# Version interpolated rather than spelled out: hand-written, it silently
+# kept claiming 0.5.0 across releases.
 _HEADERS = {
-    "User-Agent": "sportsball/0.5.0 (+https://github.com/welch/sportsball)",
+    "User-Agent": f"sportsball/{__version__} (+https://github.com/welch/sportsball)",
     "Accept": "application/json",
 }
 

@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-07-29
+
 ### Changed
 
 - Day colors now answer two questions on two channels instead of conflating
@@ -147,6 +149,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   previous success metadata. Before this, a single bad day wiped out
   "when did this adapter last work?" on the health page — exactly the
   signal we needed when cdn.nba.com started 403'ing.
+
+## [0.5.0] - 2026-05-08
 
 ### Added
 
