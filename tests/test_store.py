@@ -220,3 +220,46 @@ def test_current_snapshot_kind_is_not_overwritten_by_the_bridge() -> None:
         "kind": "home",
     }
     assert Event.model_validate(current).kind == "home"
+
+
+def test_current_generation_none_when_bucket_unset(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("EVENTS_BUCKET", raising=False)
+    assert store.current_generation() is None
+
+
+def test_current_generation_reads_metadata_not_payload(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The whole point is that this is cheap — metadata only, no download."""
+    monkeypatch.setenv("EVENTS_BUCKET", "test-bucket")
+    fake_blob = MagicMock()
+    fake_blob.generation = 1748301234567890
+    fake_bucket = MagicMock()
+    fake_bucket.get_blob.return_value = fake_blob
+    fake_client = MagicMock()
+    fake_client.bucket.return_value = fake_bucket
+    monkeypatch.setattr(store, "_client", lambda: fake_client)
+
+    assert store.current_generation() == 1748301234567890
+    fake_bucket.get_blob.assert_called_once_with(store.BLOB_NAME)
+    fake_blob.download_as_bytes.assert_not_called()
+
+
+def test_current_generation_none_when_blob_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("EVENTS_BUCKET", "test-bucket")
+    fake_bucket = MagicMock()
+    fake_bucket.get_blob.return_value = None
+    fake_client = MagicMock()
+    fake_client.bucket.return_value = fake_bucket
+    monkeypatch.setattr(store, "_client", lambda: fake_client)
+
+    assert store.current_generation() is None
+
+
+def test_current_generation_swallows_api_errors(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A GCS hiccup must read as "no change", not as "the blob is gone" —
+    callers would otherwise fall back to hammering the adapters."""
+    monkeypatch.setenv("EVENTS_BUCKET", "test-bucket")
+    fake_client = MagicMock()
+    fake_client.bucket.side_effect = RuntimeError("503 backend error")
+    monkeypatch.setattr(store, "_client", lambda: fake_client)
+
+    assert store.current_generation() is None

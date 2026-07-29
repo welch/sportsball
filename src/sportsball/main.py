@@ -30,6 +30,11 @@ from sportsball.models import Event
 
 ENV_YAML_PATH = Path(__file__).resolve().parents[2] / "env.yaml"
 CACHE_TTL_SECONDS = 12 * 3600
+# How often a warm instance asks GCS whether the snapshot blob has been
+# overwritten. Cheap enough (a metadata GET, no payload) to run at this
+# cadence, and it's what makes a `bin/refresh` land on instances that are
+# already warm instead of waiting out `CACHE_TTL_SECONDS`.
+SNAPSHOT_POLL_SECONDS = 60
 
 # MLB cities (current homes — Athletics moved to Sacramento for 2025-26
 # while they wait on their Las Vegas park). San Francisco is intentionally
@@ -216,7 +221,16 @@ def venue_colorize(venue: str) -> Markup:
 
 
 _cache_lock = threading.Lock()
-_cache: dict[str, Any] = {"events": None, "fetched_at": 0.0, "previously_unseen": []}
+_cache: dict[str, Any] = {
+    "events": None,
+    "fetched_at": 0.0,
+    "previously_unseen": [],
+    # Generation of the storage blob these events came from, and when we
+    # last asked GCS whether that's still the current one. Both stay unset
+    # on the adapter-fallback path, where there's no blob to compare to.
+    "generation": None,
+    "checked_at": 0.0,
+}
 
 
 ADAPTER_NAMES: tuple[str, ...] = (
@@ -237,28 +251,64 @@ def _adapters() -> list[tuple[str, Any]]:
     ]
 
 
+def _snapshot_replaced(now: float) -> bool:
+    """Has the storage blob been overwritten since we loaded it?
+
+    Rate-limited to one metadata call per `SNAPSHOT_POLL_SECONDS` so a busy
+    instance doesn't ask GCS on every request. Caller holds `_cache_lock`.
+
+    An unknown generation counts as "no" — see `store.current_generation`.
+    That also covers the no-bucket case, where the check costs nothing and
+    the 12-hour TTL remains the only trigger.
+    """
+    if now - _cache["checked_at"] < SNAPSHOT_POLL_SECONDS:
+        return False
+    _cache["checked_at"] = now
+    generation = store.current_generation()
+    return generation is not None and generation != _cache["generation"]
+
+
 def _events() -> list[Event]:
     """Return the cached event list, refreshing from storage when stale.
+
+    Three things make the cache stale: nothing loaded yet, a snapshot older
+    than `CACHE_TTL_SECONDS`, or the cron (or `bin/refresh`) having written
+    a new blob since we loaded ours. That last check is what lets a manual
+    refresh reach warm instances promptly rather than waiting out the TTL,
+    which matters while the event data is still being shaken out.
 
     Cache miss → try Cloud Storage first (cron writes a snapshot daily).
     If the blob is missing or unreadable, fall back to fetching adapters
     directly so local dev (no `EVENTS_BUCKET` set) keeps working.
     """
     with _cache_lock:
-        stale = _cache["events"] is None or time.time() - _cache["fetched_at"] > CACHE_TTL_SECONDS
+        now = time.time()
+        stale = (
+            _cache["events"] is None
+            or now - _cache["fetched_at"] > CACHE_TTL_SECONDS
+            or _snapshot_replaced(now)
+        )
         if stale:
+            # Generation before body, deliberately. If the blob is rewritten
+            # between the two calls we record the older generation and reload
+            # once more at the next poll — a wasted read. The other ordering
+            # would file a payload under a generation newer than itself and
+            # sit on stale events until the TTL expired.
+            generation = store.current_generation()
             stored = store.read_events()
             if stored is not None:
                 events, fetched_at, prev_unseen, adapter_snapshot = stored
                 _cache["events"] = events
                 _cache["fetched_at"] = fetched_at.timestamp()
                 _cache["previously_unseen"] = prev_unseen
+                _cache["generation"] = generation
                 if adapter_snapshot:
                     stats.load_adapter_stats(adapter_snapshot)
             else:
                 _cache["events"] = fetch_all(_adapters())
-                _cache["fetched_at"] = time.time()
+                _cache["fetched_at"] = now
                 _cache["previously_unseen"] = []
+                _cache["generation"] = None
         return _cache["events"]
 
 
@@ -577,4 +627,7 @@ def refresh() -> tuple[str, int]:
         _cache["events"] = events
         _cache["fetched_at"] = fetched_at.timestamp()
         _cache["previously_unseen"] = prev_unseen
+        # Record the generation we just wrote, so the poll doesn't read our
+        # own write back as somebody else's change on the next request.
+        _cache["generation"] = store.current_generation()
     return f"refreshed: {len(events)} events ({len(prev_unseen)} new)\n", 200

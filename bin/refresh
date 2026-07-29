@@ -7,8 +7,8 @@
 # by us or by anyone else. Nothing strips it locally, though: run the app
 # here, send the header ourselves, and the handler does exactly what the
 # 6am cron does — fetch every adapter and write the snapshot to Cloud
-# Storage. Deployed instances pick it up on their next cold start, or when
-# their 12-hour cache expires.
+# Storage. Deployed instances notice within a minute — they poll the blob's
+# generation number and reload when it changes.
 #
 # This writes the real production blob: the adapters run on your machine
 # and your credentials do the write. Run it AFTER deploying, never before —

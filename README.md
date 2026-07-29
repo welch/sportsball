@@ -167,8 +167,10 @@ To force a refresh rather than wait for 06:00, run `bin/refresh`, or pass
 `--refresh` to `bin/deploy` to do it as soon as the deploy lands. Nothing
 strips that header locally, so the script starts the app on a loopback
 port, sends the header itself, and lets the ordinary handler fetch every
-adapter and write the snapshot. Deployed instances pick it up on their next
-cold start, or when their 12-hour cache expires.
+adapter and write the snapshot. Deployed instances pick it up within a
+minute: each one polls the blob's GCS generation number on that interval and
+re-downloads only when it has changed, so a manual refresh reaches warm
+instances without waiting out their 12-hour cache.
 
 Two things to know before using it. It writes the real production blob —
 the adapters run on your machine and your credentials do the write. And run

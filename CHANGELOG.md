@@ -48,6 +48,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   or local dev) falls back to the repo root. The "as of" timestamp links to
   the day page for that date, so a health check is one click from what the
   site was actually saying at the time.
+- Warm instances now notice a new snapshot within a minute instead of
+  waiting out the 12-hour cache. `_events()` polls the storage blob's GCS
+  generation number on a 60-second interval — a metadata GET, not the
+  payload — and re-downloads only when it differs from the generation it
+  loaded. `bin/refresh` used to reach only the instance that served
+  `/tasks/refresh`; every other instance sat on stale events until it cold
+  started. The old TTL stays as a backstop. An unreadable generation counts
+  as "unchanged", so a GCS hiccup leaves instances serving cache rather
+  than falling through to the adapters, and with no `EVENTS_BUCKET` the
+  check costs nothing.
 - `REPO_URL` joins the `env.yaml` settings. It isn't secret, and it's
   configuration rather than a constant for one reason: a fork should link
   its own source, not this repo's. Unset, the build string renders plain —

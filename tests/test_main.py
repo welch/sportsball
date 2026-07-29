@@ -29,6 +29,20 @@ def _no_live_adapter_fetches(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.fixture(autouse=True)
+def _reset_events_cache() -> None:
+    """`main._cache` is module-level, so one test's snapshot (or blob
+    generation) would otherwise decide whether the next one reloads.
+    """
+    main._cache.update(
+        events=None,
+        fetched_at=0.0,
+        previously_unseen=[],
+        generation=None,
+        checked_at=0.0,
+    )
+
+
+@pytest.fixture(autouse=True)
 def _stub_cloud_logging_query(monkeypatch: pytest.MonkeyPatch) -> None:
     """Tests hitting `/health/<token>` would otherwise reach Cloud Logging
     via `stats.request_summary()`. Stub at the function level so the health
@@ -1200,3 +1214,90 @@ def test_ball_overrides_only_the_dash_period() -> None:
     block = _css_block(css, ".ball-frame.ring-oracle::before,\n.ball-frame.ring-chase::after")
     assert "--dash-period" in block
     assert "conic-gradient" not in block
+
+
+def _warm_cache(events: list, *, generation: int | None, age: float = 0.0) -> None:
+    """Put the cache in the state a warm instance is in: events loaded from
+    a known blob generation, well inside the 12-hour TTL."""
+    import time as _time
+
+    main._cache.update(
+        events=events,
+        fetched_at=_time.time() - age,
+        previously_unseen=[],
+        generation=generation,
+        checked_at=0.0,
+    )
+
+
+def test_events_reloads_when_blob_generation_changed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A warm instance inside its TTL still picks up a `bin/refresh` write,
+    which is the whole point of the generation poll."""
+    from datetime import datetime as _datetime
+
+    _warm_cache(["stale"], generation=100)
+    fresh = ["fresh"]
+    monkeypatch.setattr(main.store, "current_generation", lambda: 101)
+    monkeypatch.setattr(
+        main.store,
+        "read_events",
+        lambda: (fresh, _datetime(2026, 5, 6, 6, 0, tzinfo=PT), [], []),
+    )
+    monkeypatch.setattr(main, "fetch_all", lambda adapters: pytest.fail("should not fetch"))
+
+    assert main._events() is fresh
+    assert main._cache["generation"] == 101
+
+
+def test_events_serves_cache_when_generation_unchanged(monkeypatch: pytest.MonkeyPatch) -> None:
+    cached = ["cached"]
+    _warm_cache(cached, generation=100)
+    monkeypatch.setattr(main.store, "current_generation", lambda: 100)
+    monkeypatch.setattr(main.store, "read_events", lambda: pytest.fail("should not re-download"))
+    monkeypatch.setattr(main, "fetch_all", lambda adapters: pytest.fail("should not fetch"))
+
+    assert main._events() is cached
+
+
+def test_generation_poll_is_rate_limited(monkeypatch: pytest.MonkeyPatch) -> None:
+    """One metadata call per SNAPSHOT_POLL_SECONDS, not one per request."""
+    import time as _time
+
+    calls = []
+    monkeypatch.setattr(main.store, "current_generation", lambda: calls.append(1) or 100)
+    monkeypatch.setattr(main.store, "read_events", lambda: pytest.fail("should not re-download"))
+    _warm_cache(["cached"], generation=100)
+
+    for _ in range(5):
+        main._events()
+    assert len(calls) == 1
+
+    # Push the last check back past the interval and it asks again.
+    main._cache["checked_at"] = _time.time() - main.SNAPSHOT_POLL_SECONDS - 1
+    main._events()
+    assert len(calls) == 2
+
+
+def test_events_keeps_cache_when_generation_unavailable(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A GCS hiccup (or no bucket at all) must not trigger a reload — an
+    unknown generation means "can't tell", not "changed"."""
+    cached = ["cached"]
+    _warm_cache(cached, generation=100)
+    monkeypatch.setattr(main.store, "current_generation", lambda: None)
+    monkeypatch.setattr(main.store, "read_events", lambda: pytest.fail("should not re-download"))
+    monkeypatch.setattr(main, "fetch_all", lambda adapters: pytest.fail("should not fetch"))
+
+    assert main._events() is cached
+
+
+def test_refresh_records_the_generation_it_wrote(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Otherwise the cron's own write reads back as somebody else's change
+    and the instance re-downloads the payload it just built."""
+    monkeypatch.setattr(main.store, "read_events", lambda: None)
+    monkeypatch.setattr(main.store, "write_events", lambda *a, **k: None)
+    monkeypatch.setattr(main.store, "current_generation", lambda: 202)
+    monkeypatch.setattr(main, "fetch_all", lambda adapters: [])
+
+    response = main.app.test_client().get("/tasks/refresh", headers={"X-Appengine-Cron": "true"})
+    assert response.status_code == 200
+    assert main._cache["generation"] == 202

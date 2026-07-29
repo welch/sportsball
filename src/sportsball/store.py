@@ -98,6 +98,29 @@ def read_events() -> tuple[list[Event], datetime, list[Event], list[AdapterStats
     return events, fetched_at, previously_unseen, adapter_stats
 
 
+def current_generation() -> int | None:
+    """Generation number of the snapshot blob, without downloading its body.
+
+    GCS bumps ``generation`` on every overwrite, so comparing it against the
+    generation a serving instance loaded is a cheap "is my snapshot still
+    the current one?" — a metadata GET rather than the whole payload.
+
+    Returns ``None`` for every "can't tell" case: bucket unset, blob missing,
+    transient API error. Callers read that as "no change" rather than "gone",
+    so a GCS hiccup leaves the instance serving its cache instead of
+    stampeding the upstream adapters.
+    """
+    bucket = _bucket_name()
+    if not bucket:
+        return None
+    try:
+        blob = _client().bucket(bucket).get_blob(BLOB_NAME)
+    except Exception:
+        log.exception("storage generation check failed")
+        return None
+    return blob.generation if blob is not None else None
+
+
 def previously_unseen(new_events: list[Event], prev_events: list[Event]) -> list[Event]:
     """Subset of ``new_events`` whose ``(source, source_id)`` wasn't in ``prev_events``."""
     prev_keys = {(e.source, e.source_id) for e in prev_events}
