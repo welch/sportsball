@@ -2,23 +2,13 @@
 
 ### (aka "Is My Day @#$%#'d?")
 
-_Sportsball_ is a one-page application that speaks to the central question
+_Sportsball_ is a two-page application that speaks to the central question
 of life in San Francisco's South Beach and Mission Bay neighborhoods:
 
 _is my day going to be hosed by a Giants or Warriors home game
 (or a Celine Dion concert at the Chase Center)?_
 
-A big Magic-8-Ball gives the verdict; small print explains why.
-
-Tracks large events at:
-
-- **Oracle Park** — SF Giants home games + concerts
-- **Chase Center** — Golden State Warriors home games, Golden State Valkyries
-  (WNBA) home games, and concerts
-
-## How it works
-
-Four upstream sources feed the page:
+Tracks large events via MLB, NBA, and Ticketmaster API's:
 
 - [MLB Stats API](https://statsapi.mlb.com) — Giants schedule
 - [NBA CDN](https://cdn.nba.com) league schedule — Warriors home games
@@ -26,11 +16,8 @@ Four upstream sources feed the page:
   per venue, covering concerts, family shows, Valkyries, etc. (MLB and NBA
   game listings are filtered out so they don't duplicate the team feeds)
 
-A cron job pulls from all four daily at 06:00 PT, normalizes everything
-into a common `Event` shape, computes the diff against the previous run,
-and persists a snapshot to Google Cloud Storage. Serving instances read
-the snapshot on cold start, so the "last updated" timestamp reflects the
-cron run rather than each instance's first fetch.
+A cron job pulls them daily at 06:00 PT and persists a snapshot to
+Google Cloud Storage. Serving instances read the snapshot on cold start.
 
 URL patterns:
 
@@ -45,21 +32,9 @@ URL patterns:
 | `/<verb>/calendar/2026-12` | Both |
 | `/health/<token>` | Operator status page (token-gated, 404s on mismatch) |
 
-The calendar rings each day exactly the way the 8-ball halo does, on two
-channels. Hue says **where**: orange for Oracle Park, blue for Chase Center.
-Texture says **what**: a soft glow marks a home game, a dashed ring means
-something else has the building — a concert, a monster truck
-rally, a college doubleheader. They compose, so a Giants game and a concert
-at Oracle Park on the same day is an orange glow with an orange dash through
-it.
+(<verb> is configurable for locales with sensitive ears)
 
-Keeping venue on the hue is deliberate: a third venue would cost one color
-instead of two, and four hues stop being distinguishable at the size of a
-calendar cell.
-
-Clicking the date under the 8-ball opens that month; clicking a day in the
-calendar goes back to the 8-ball for that date. A verb in the path is
-carried across both hops.
+Navigate between day and month views by clicking a date on either.
 
 ## Run your own
 
@@ -170,14 +145,10 @@ gcloud app deploy cron.yaml --project=<your-project-id>
 
 `bin/deploy` is a thin wrapper around `gcloud app deploy app.yaml` that
 encodes the current git state (tag, short SHA, clean/dirty) into the
-GAE version ID. The runtime then reads `$GAE_VERSION` and shows it on
-the health page, so "what's actually running" is one click away.
+GAE version ID.  A bare `gcloud app deploy app.yaml` gets you a staging
+deployment with a timestamp version ID — health page will display that raw.
 
-A bare `gcloud app deploy app.yaml` still works but assigns a timestamp
-version ID — health page will display that raw, which is itself a clear
-"this wasn't deployed via bin/deploy" signal.
-
-`cron.yaml` runs `/tasks/refresh` daily at 06:00 PT, which fetches all four
+`cron.yaml` runs `/tasks/refresh` daily at 06:00 PT, which fetches all
 sources and writes a fresh snapshot to `EVENTS_BUCKET`. The endpoint is
 gated by the `X-Appengine-Cron` header (GAE strips this from external
 requests), so nothing on the internet can trigger it — including you.
