@@ -32,7 +32,7 @@ URL patterns:
 | `/<verb>/calendar/2026-12` | Both |
 | `/health/<token>` | Operator status page (token-gated, 404s on mismatch) |
 
-(<verb> is configurable for locales with sensitive ears)
+(`<verb>` is configurable for locales with sensitive ears)
 
 Navigate between day and month views by clicking a date on either.
 
