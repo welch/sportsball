@@ -1,6 +1,6 @@
 [project]
 name = "sportsball"
-version = "0.6.0"
+version = "0.7.0"
 description = "Tracks large events at Oracle Park and Chase Center, so SF residents can plan around the noise."
 readme = "README.md"
 license = "MIT"
