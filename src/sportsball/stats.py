@@ -29,6 +29,29 @@ log = logging.getLogger(__name__)
 # thousands of entries on every render.
 _REQUEST_SUMMARY_TTL_SECONDS = 300.0
 
+# Hard bounds on the log scan. Cloud Logging has no server-side count, so
+# the summary is computed by walking entries at roughly 2.75ms apiece —
+# meaning the cost of rendering /health scaled with how much traffic the
+# site got. In Aug 2026 a crawler flood took the window to 93k entries and
+# the scan to ~182s, well past gunicorn's 30s timeout, so the worker was
+# killed and the page 500'd instead of degrading.
+#
+# TODO: replace the scan with Cloud Monitoring's
+# `appengine.googleapis.com/http/server/response_count`, which carries a
+# `response_code_class` label and aggregates server-side — exact counts in
+# one call instead of a bounded sample that under-reports precisely when
+# traffic spikes. Needs monitoring.googleapis.com enabled and
+# roles/monitoring.viewer on the App Engine service account, which has only
+# roles/logging.viewer today. Keep this scan as the fallback.
+#
+# The deadline is the real budget — it's the one that bounds page latency
+# whatever the API is doing, and it's set well under gunicorn's 30s timeout
+# so the request finishes on our terms rather than SIGABRT's. The entry cap
+# is a backstop for the opposite case: entries arriving fast enough that we'd
+# otherwise buffer an unreasonable number of them inside the budget.
+_REQUEST_SCAN_DEADLINE_SECONDS = 5.0
+_REQUEST_SCAN_MAX_ENTRIES = 20_000
+
 
 class AdapterStats(BaseModel):
     """Snapshot of one adapter's most recent success and failure."""
@@ -52,6 +75,11 @@ class RequestSummary(BaseModel):
     user_traffic: int = 0
     window_hours: int = 24
     source: str = "cloud-logging"  # or "unavailable" when the query failed
+    # True when the scan hit `_REQUEST_SCAN_MAX_ENTRIES` or its deadline and
+    # stopped early. The counts are then floors, not totals — the template
+    # renders them with a "+" so nobody reads a bounded scan as the real
+    # number. Under normal traffic this is always False.
+    truncated: bool = False
 
 
 _lock = threading.Lock()
@@ -146,7 +174,11 @@ def _logging_client() -> Any:
 
 
 def _query_request_summary(window_hours: int = 24) -> RequestSummary:
-    """Single-shot Cloud Logging query — no caching."""
+    """Single-shot Cloud Logging query — no caching, bounded work.
+
+    Stops at `_REQUEST_SCAN_MAX_ENTRIES` or `_REQUEST_SCAN_DEADLINE_SECONDS`,
+    whichever comes first, and flags the result `truncated` when it does.
+    """
     cutoff = datetime.now(UTC) - timedelta(hours=window_hours)
     cutoff_iso = cutoff.replace(microsecond=0, tzinfo=None).isoformat() + "Z"
     # Exclude operator/health/cron paths so the count reflects user traffic only.
@@ -161,7 +193,16 @@ def _query_request_summary(window_hours: int = 24) -> RequestSummary:
     by_class: dict[str, int] = {}
     total = 0
     user_traffic = 0
+    truncated = False
+    scanned = 0
+    deadline = time.monotonic() + _REQUEST_SCAN_DEADLINE_SECONDS
     for entry in _logging_client().list_entries(filter_=filter_, page_size=1000):
+        # Checked per entry rather than per page: a page is 1000 entries and
+        # ~2.75s of parsing, which is most of the budget on its own.
+        scanned += 1
+        if scanned > _REQUEST_SCAN_MAX_ENTRIES or time.monotonic() > deadline:
+            truncated = True
+            break
         http = getattr(entry, "http_request", None)
         if not http:
             continue
@@ -173,12 +214,18 @@ def _query_request_summary(window_hours: int = 24) -> RequestSummary:
         total += 1
         if 200 <= status < 300:
             user_traffic += 1
+    if truncated:
+        log.warning(
+            "request summary scan truncated at %d entries; counts are floors",
+            total,
+        )
     return RequestSummary(
         total=total,
         by_class=by_class,
         user_traffic=user_traffic,
         window_hours=window_hours,
         source="cloud-logging",
+        truncated=truncated,
     )
 
 

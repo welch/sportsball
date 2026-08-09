@@ -30,6 +30,15 @@ from sportsball.models import Event
 
 ENV_YAML_PATH = Path(__file__).resolve().parents[2] / "env.yaml"
 CACHE_TTL_SECONDS = 12 * 3600
+# How far either side of today the browsable date space extends, in whole
+# calendar years. The calendar used to step forever in both directions —
+# defensible for a human, fatal with a crawler: in Aug 2026 GPTBot followed
+# the next-month chevron out to year 9241 and sustained ~7k requests/hour,
+# which is also what pushed the health page's 24h log scan past gunicorn's
+# timeout. A year either side is far past any adapter's horizon (MLB and NBA
+# publish one season; Ticketmaster about a year), so nobody browsing in good
+# faith reaches the edge, and a crawler that does finds no link to follow.
+BROWSE_YEARS = 1
 # How often a warm instance asks GCS whether the snapshot blob has been
 # overwritten. Cheap enough (a metadata GET, no payload) to run at this
 # cadence, and it's what makes a `bin/refresh` land on instances that are
@@ -338,6 +347,43 @@ def _verb_color_class(today_events: list[Event]) -> str:
     return VENUE_COLORS.get(next(iter(venues)), "")
 
 
+def _canonical_url(endpoint: str, **values: Any) -> str:
+    """Absolute URL for `endpoint` with the verb deliberately left off.
+
+    `VerbConverter` matches any letters-only segment, so `/fucked/`,
+    `/banana/` and every other word render the same page — an unbounded set
+    of URLs for one piece of content. Nothing on the site links to an
+    arbitrary verb, so a crawler starting at `/` never wanders in, but a
+    single shared `/fucked/` link is enough to pull that whole subtree into
+    the index as duplicates. Pointing every variant at the bare URL
+    consolidates them.
+
+    Built against `$CANONICAL_HOST` when set, so the tag names the real
+    domain rather than whichever Host header showed up (appspot.com, an IP,
+    a stale alias). Falls back to the request host for local dev.
+    """
+    canonical_host = os.environ.get("CANONICAL_HOST")
+    if canonical_host:
+        return f"https://{canonical_host}{url_for(endpoint, **values)}"
+    return url_for(endpoint, _external=True, **values)
+
+
+def _browse_range() -> tuple[date, date]:
+    """Inclusive first/last date the site will render, `BROWSE_YEARS` either
+    side of today rounded out to whole calendar years.
+
+    Whole years rather than a rolling 365 days so the bound doesn't drift
+    mid-month and turn a URL somebody bookmarked yesterday into a 404 today.
+    """
+    year = datetime.now(tz=PT).year
+    return date(year - BROWSE_YEARS, 1, 1), date(year + BROWSE_YEARS, 12, 31)
+
+
+def _in_browse_range(d: date) -> bool:
+    earliest, latest = _browse_range()
+    return earliest <= d <= latest
+
+
 def _nav_urls(verb: str | None) -> Any:
     """Build a URL helper that carries an explicit verb across navigation.
 
@@ -365,6 +411,8 @@ def index(verb: str | None = None, isodate: date | None = None) -> str:
     if verb is None:
         verb = os.environ.get("VERB", "hosed")
     if isodate is not None:
+        if not _in_browse_range(isodate):
+            abort(404)
         now = datetime.combine(isodate, dtime(12, 0), tzinfo=PT)
     else:
         now = datetime.now(tz=PT)
@@ -391,6 +439,11 @@ def index(verb: str | None = None, isodate: date | None = None) -> str:
         next_event_label=next_event_label,
         last_updated=_last_updated_label(),
         calendar_url=url("month_calendar", ym=status.today.replace(day=1)),
+        canonical_url=(
+            _canonical_url("index", isodate=isodate)
+            if isodate is not None
+            else _canonical_url("index")
+        ),
     )
 
 
@@ -402,29 +455,43 @@ def month_calendar(verb: str | None = None, ym: date | None = None) -> str:
     """Month grid where each day wears the same colored rings as the 8-ball.
 
     Clicking a day drops into the 8-ball view for that date; the chevrons
-    step a month at a time with no bound in either direction — the event
-    horizon is whatever the adapters know about, and empty months are a
-    perfectly good answer.
+    step a month at a time within `_browse_range` — empty months are a
+    perfectly good answer, but the walk has to stop somewhere or a crawler
+    takes it to the heat death of the universe (see `BROWSE_YEARS`). At the
+    edges the chevron and the spill-over day cells render as dead text
+    rather than links, so there's nothing to follow past the boundary.
     """
     url = _nav_urls(verb)
     if verb is None:
         verb = os.environ.get("VERB", "hosed")
     today = datetime.now(tz=PT).date()
     month = ym if ym is not None else today.replace(day=1)
+    if not _in_browse_range(month):
+        abort(404)
     view = month_view(_events(), month, today)
+
+    def month_url(target: date) -> str | None:
+        return url("month_calendar", ym=target) if _in_browse_range(target) else None
+
+    def day_url(d: date) -> str | None:
+        return url("index", isodate=d) if _in_browse_range(d) else None
+
     return render_template(
         "calendar.html",
         verb=verb,
         view=view,
         weekday_labels=WEEKDAY_LABELS,
         month_label=month.strftime("%B %Y"),
-        prev_url=url("month_calendar", ym=view.prev_month),
-        next_url=url("month_calendar", ym=view.next_month),
+        prev_url=month_url(view.prev_month),
+        next_url=month_url(view.next_month),
         prev_label=view.prev_month.strftime("%B %Y"),
         next_label=view.next_month.strftime("%B %Y"),
         home_url=url("index"),
-        day_url=lambda d: url("index", isodate=d),
+        day_url=day_url,
         last_updated=_last_updated_label(),
+        # Bare month URL even when `ym` came from the bare `/calendar/`
+        # route, so `/calendar/` and `/calendar/2026-08` don't compete.
+        canonical_url=_canonical_url("month_calendar", ym=month),
     )
 
 
@@ -530,12 +597,42 @@ def healthz() -> tuple[str, int]:
     return "ok", 200
 
 
+# Operator endpoints, plus the month view — it exists to be clicked from the
+# day page, not found cold in search results, and it's the densest part of
+# the crawlable space. Both calendar rules are needed: `/calendar/` matches
+# only paths that start that way, so the verb-prefixed
+# `/fucked/calendar/2026-08` needs the wildcard form.
+#
+# Day views stay crawlable, with their verb variants folded onto the bare URL
+# by `_canonical_url` rather than blocked here — robots.txt would stop the
+# fetch but not the indexing, and a blocked URL can still surface with no
+# description. `Crawl-delay` is advisory and Google ignores it outright, so
+# the real defence remains `_browse_range`, not this file.
+ROBOTS_TXT = """User-agent: *
+Disallow: /health/
+Disallow: /healthz
+Disallow: /tasks/
+Disallow: /calendar/
+Disallow: /*/calendar/
+Crawl-delay: 10
+"""
+
+
+@app.get("/robots.txt")
+def robots() -> Response:
+    return Response(ROBOTS_TXT, mimetype="text/plain")
+
+
 @app.get("/about")
 def about() -> str:
     """Plain-language explanation of what the site does. The footer links
     here so casual visitors don't get dumped straight into a code repo.
     """
-    return render_template("about.html", random_city=random.choice(MLB_CITIES))
+    return render_template(
+        "about.html",
+        random_city=random.choice(MLB_CITIES),
+        canonical_url=_canonical_url("about"),
+    )
 
 
 @app.get("/health/<token>")

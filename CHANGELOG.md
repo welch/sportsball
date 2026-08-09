@@ -7,6 +7,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `/health/<token>` returned a 500 instead of a page. The traffic summary
+  counts a 24-hour window by walking Cloud Logging entries one at a time —
+  there's no server-side count — at roughly 2.75ms apiece, so the cost of
+  rendering the page scaled with how much traffic the site had. A crawler
+  flood (below) took the window to 93,451 entries and the scan to ~182s,
+  well past gunicorn's 30s timeout, so the worker was killed mid-request.
+  The existing `except Exception` guard couldn't degrade the page the way
+  it was meant to, because a killed worker raises `SystemExit`, which isn't
+  an `Exception`. The scan now stops at a 5s deadline (with a 20k-entry
+  backstop) and flags the result, and the page renders the counts with a
+  trailing `+` plus a warning that they're floors rather than totals. The
+  guard stays `except Exception` on purpose: swallowing a worker abort
+  would leave a process running that gunicorn is trying to kill. Bounding
+  the work is what prevents the abort.
+
+### Changed
+
+- The browsable date range is bounded to a year either side of the current
+  one, rounded out to whole calendar years. The calendar's chevrons used to
+  step forever in both directions, and every day cell linked to a day view
+  that linked back to a month — an unbounded URL space. In August 2026
+  GPTBot walked it out to `/calendar/9241-09` and sustained ~7,000 requests
+  an hour for over a day, which is what pushed the health page's log scan
+  past its timeout. Dates outside the range 404, and at the edges the
+  chevron and the spill-over day cells render as plain text rather than
+  links, so a crawler finds nothing to follow. The bound is far past any
+  adapter's horizon — MLB and NBA publish a season, Ticketmaster about a
+  year — so browsing in good faith never reaches it.
+- Added `robots.txt`, closing `/health/`, `/healthz`, `/tasks/`, and the
+  month view — the calendar exists to be clicked from the day page rather
+  than found cold in search, and it's the densest part of the crawlable
+  space. Closing it takes two rules: `Disallow: /calendar/` matches only
+  paths that begin that way, so the verb-prefixed `/fucked/calendar/2026-08`
+  needs the wildcard form as well. The advertised crawl delay is advisory
+  and Google ignores it outright; the real defence is the bounded range.
+- Every page now carries a `<link rel="canonical">` pointing at its
+  verb-less URL. `VerbConverter` matches any letters-only segment, so
+  `/fucked/`, `/banana/` and every other word render the same content at a
+  different URL — an unbounded set of duplicates sitting behind the bounded
+  date space. Nothing links to an arbitrary verb, so a crawler starting at
+  `/` never wanders in, but one shared `/fucked/` link is enough to pull
+  that entire subtree into the index. The tag is `<head>` metadata only:
+  in-page links still carry the visitor's verb, so someone who arrived at
+  `/fucked/` stays there as they navigate. Built against `$CANONICAL_HOST`
+  so the tag names the real domain rather than whatever `Host` header
+  arrived.
+
 ## [0.6.0] - 2026-07-29
 
 ### Changed

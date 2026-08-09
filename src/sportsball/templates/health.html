@@ -12,6 +12,7 @@
       h2 { font-size: 1.1em; margin: 1.5em 0 .5em; border-bottom: 1px solid #ddd;
            padding-bottom: .25em; }
       .meta { color: #666; font-size: .9em; }
+      .meta.warn { color: #8a5300; }
       table { border-collapse: collapse; width: 100%; margin-top: .5em; }
       th, td { padding: .35em .6em; text-align: left; vertical-align: top;
                border-bottom: 1px solid #eee; }
@@ -81,7 +82,10 @@
       <p class="muted">Cloud Logging query failed — see server logs. The
         traffic count won't render until the next successful query.</p>
     {% else %}
-      <p class="page-views"><strong>{{ request_summary.user_traffic }}</strong>
+      {# A truncated scan counted a prefix of the window, so every number
+         here is a floor. Mark them all rather than quietly under-reporting. #}
+      {% set plus = "+" if request_summary.truncated else "" %}
+      <p class="page-views"><strong>{{ request_summary.user_traffic }}{{ plus }}</strong>
         page views (2xx) in the last {{ request_summary.window_hours }} hours.</p>
       <table>
         <thead>
@@ -93,16 +97,21 @@
         <tbody>
           <tr>
             <td><strong>Total</strong></td>
-            <td class="num"><strong>{{ request_summary.total }}</strong></td>
+            <td class="num"><strong>{{ request_summary.total }}{{ plus }}</strong></td>
           </tr>
           {% for cls in ["2xx", "3xx", "4xx", "5xx"] %}
             <tr>
               <td>{{ cls }}</td>
-              <td class="num">{{ request_summary.by_class.get(cls, 0) }}</td>
+              <td class="num">{{ request_summary.by_class.get(cls, 0) }}{{ plus }}</td>
             </tr>
           {% endfor %}
         </tbody>
       </table>
+      {% if request_summary.truncated %}
+        <p class="meta warn">Scan stopped at its budget before reaching the end
+          of the window — these are lower bounds, not totals. Usually means a
+          crawler is hammering the site.</p>
+      {% endif %}
       <p class="meta">From Cloud Logging — excludes /health/, /healthz, and
         /tasks/refresh. Cached in-process for 5 minutes.</p>
     {% endif %}

@@ -8,6 +8,10 @@
     <meta property="og:title"
           content="Is my month {{ verb }}? Events at Oracle Park and Chase Center">
     <title>Is my month {{ verb }}? {{ month_label }}</title>
+    {# robots.txt keeps this page out of search entirely; the canonical is
+       here so anything that fetches it anyway still folds the verb
+       variants onto one URL. #}
+    <link rel="canonical" href="{{ canonical_url }}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="stylesheet" type="text/css"
           href="https://fonts.googleapis.com/css?family=Permanent+Marker&display=swap">
@@ -21,11 +25,19 @@
       <h1><a class="plain" href="{{ home_url }}">Is my month <span class="verb">{{ verb }}?</span></a></h1>
 
       <nav class="cal-nav">
-        <a class="chev prev" href="{{ prev_url }}" rel="prev"
-           aria-label="Go to {{ prev_label }}">&lsaquo;</a>
+        {% if prev_url %}
+          <a class="chev prev" href="{{ prev_url }}" rel="prev"
+             aria-label="Go to {{ prev_label }}">&lsaquo;</a>
+        {% else %}
+          <span class="chev prev disabled" aria-hidden="true">&lsaquo;</span>
+        {% endif %}
         <span class="cal-title">{{ month_label }}</span>
-        <a class="chev next" href="{{ next_url }}" rel="next"
-           aria-label="Go to {{ next_label }}">&rsaquo;</a>
+        {% if next_url %}
+          <a class="chev next" href="{{ next_url }}" rel="next"
+             aria-label="Go to {{ next_label }}">&rsaquo;</a>
+        {% else %}
+          <span class="chev next disabled" aria-hidden="true">&rsaquo;</span>
+        {% endif %}
       </nav>
 
       <div class="cal-grid">
@@ -36,12 +48,16 @@
         {% for week in view.weeks %}
           {% for cell in week %}
             {% set count = cell.events | length %}
-            <a class="cal-day{% for h in cell.halos %} {{ h }}{% endfor %}{% if not cell.in_month %} outside{% endif %}{% if cell.is_today %} is-today{% endif %}"
-               href="{{ day_url(cell.day) }}"
+            {% set href = day_url(cell.day) %}
+            {# Past the browse range there's no day view to link to, so the
+               cell degrades to a plain <span> — same paint, no link. #}
+            <{{ 'a' if href else 'span' }}
+               class="cal-day{% for h in cell.halos %} {{ h }}{% endfor %}{% if not cell.in_month %} outside{% endif %}{% if cell.is_today %} is-today{% endif %}"
+               {% if href %}href="{{ href }}"{% endif %}
                aria-label="{{ cell.day.strftime('%A, %B %-d, %Y') }} — {{ count }} event{{ '' if count == 1 else 's' }}"
                {% if count %}title="{% for e in cell.events %}{{ e.name }} at {{ e.venue }}{{ '' if loop.last else '\n' }}{% endfor %}"{% endif %}>
               <span class="cal-num">{{ cell.day.day }}</span>
-            </a>
+            </{{ 'a' if href else 'span' }}>
           {% endfor %}
         {% endfor %}
       </div>

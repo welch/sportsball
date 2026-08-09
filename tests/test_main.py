@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -1301,3 +1301,192 @@ def test_refresh_records_the_generation_it_wrote(monkeypatch: pytest.MonkeyPatch
     response = main.app.test_client().get("/tasks/refresh", headers={"X-Appengine-Cron": "true"})
     assert response.status_code == 200
     assert main._cache["generation"] == 202
+
+
+# --- Browse-range bounds (the GPTBot crawler trap) -------------------------
+#
+# The calendar's chevrons used to step a month at a time forever, and every
+# day cell linked to a day view that linked back to a calendar month. That's
+# an unbounded URL space, and in Aug 2026 GPTBot walked it out to year 9241
+# at ~7k requests/hour. The window below is far wider than any adapter's
+# horizon, so humans never hit it; crawlers stop at the edge.
+
+
+def test_browse_range_spans_a_year_either_side_of_today(fixed_now: datetime) -> None:
+    earliest, latest = main._browse_range()
+    assert earliest == date(2025, 1, 1)
+    assert latest == date(2027, 12, 31)
+
+
+def test_day_view_404s_outside_the_browse_range(
+    monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
+) -> None:
+    monkeypatch.setattr(main, "_events", lambda: [])
+    client = main.app.test_client()
+    assert client.get("/9241-09-03").status_code == 404
+    assert client.get("/2024-12-31").status_code == 404
+    assert client.get("/2028-01-01").status_code == 404
+
+
+def test_day_view_serves_the_edges_of_the_browse_range(
+    monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
+) -> None:
+    monkeypatch.setattr(main, "_events", lambda: [])
+    client = main.app.test_client()
+    assert client.get("/2025-01-01").status_code == 200
+    assert client.get("/2027-12-31").status_code == 200
+
+
+def test_calendar_404s_outside_the_browse_range(
+    monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
+) -> None:
+    monkeypatch.setattr(main, "_events", lambda: [])
+    client = main.app.test_client()
+    assert client.get("/calendar/9241-09").status_code == 404
+    assert client.get("/calendar/2024-12").status_code == 404
+    assert client.get("/calendar/2028-01").status_code == 404
+
+
+def test_calendar_chevron_is_dead_at_the_range_edge(
+    monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
+) -> None:
+    """The 404 alone doesn't stop a crawler — it follows links. At the edge
+    the chevron must not be a link at all."""
+    monkeypatch.setattr(main, "_events", lambda: [])
+    client = main.app.test_client()
+
+    first = client.get("/calendar/2025-01").data.decode()
+    assert 'href="/calendar/2024-12"' not in first
+    assert 'href="/calendar/2025-02"' in first  # forward still works
+
+    last = client.get("/calendar/2027-12").data.decode()
+    assert 'href="/calendar/2028-01"' not in last
+    assert 'href="/calendar/2027-11"' in last
+
+
+def test_calendar_edge_month_day_cells_stay_inside_the_range(
+    monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
+) -> None:
+    """The grid spills into adjacent months to fill whole weeks. On the
+    first month those spill days fall outside the range, so they must not
+    be links either."""
+    monkeypatch.setattr(main, "_events", lambda: [])
+    body = main.app.test_client().get("/calendar/2025-01").data.decode()
+    assert 'href="/2024-12-29"' not in body
+
+
+def test_robots_txt_is_served_and_closes_the_operator_paths() -> None:
+    response = main.app.test_client().get("/robots.txt")
+    assert response.status_code == 200
+    assert response.mimetype == "text/plain"
+    body = response.data.decode()
+    assert "Disallow: /health/" in body
+    assert "Disallow: /tasks/" in body
+
+
+def test_health_marks_a_truncated_scan_as_a_floor(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A bounded scan under-counts by design. The page has to say so, or the
+    operator reads a flood as a quiet day."""
+    monkeypatch.setenv("HEALTH_TOKEN", "t0ken")
+    monkeypatch.setattr(main, "_events", lambda: [])
+    monkeypatch.setattr(
+        stats,
+        "_query_request_summary",
+        lambda window_hours=24: stats.RequestSummary(
+            total=3000, by_class={"2xx": 2900}, user_traffic=2900, truncated=True
+        ),
+    )
+    body = main.app.test_client().get("/health/t0ken").data.decode()
+    assert "3000+" in body
+    assert "2900+" in body
+    assert "lower bounds" in body
+
+
+def test_health_does_not_mark_a_complete_scan(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("HEALTH_TOKEN", "t0ken")
+    monkeypatch.setattr(main, "_events", lambda: [])
+    monkeypatch.setattr(
+        stats,
+        "_query_request_summary",
+        lambda window_hours=24: stats.RequestSummary(
+            total=42, by_class={"2xx": 40}, user_traffic=40
+        ),
+    )
+    body = main.app.test_client().get("/health/t0ken").data.decode()
+    assert "42+" not in body
+    assert "lower bounds" not in body
+
+
+# --- Canonical URLs -------------------------------------------------------
+#
+# `VerbConverter` matches any letters-only segment, so every page is
+# reachable at unboundedly many URLs (`/fucked/`, `/banana/`, …). Nothing
+# links to an arbitrary verb, so a crawler starting at `/` never finds them
+# — but one shared `/fucked/` link puts that whole subtree in the index as
+# duplicate content. The canonical tag folds them onto the bare URL without
+# touching the in-page links, which must keep carrying the visitor's verb.
+
+
+def test_day_view_canonical_drops_the_verb(
+    monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
+) -> None:
+    monkeypatch.setattr(main, "_events", lambda: [])
+    body = main.app.test_client().get("/fucked/2026-05-15").data.decode()
+    assert '<link rel="canonical" href="http://localhost/2026-05-15">' in body
+
+
+def test_bare_day_view_canonical_points_at_itself(
+    monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
+) -> None:
+    monkeypatch.setattr(main, "_events", lambda: [])
+    body = main.app.test_client().get("/2026-05-15").data.decode()
+    assert '<link rel="canonical" href="http://localhost/2026-05-15">' in body
+
+
+def test_index_canonical_is_the_root(monkeypatch: pytest.MonkeyPatch, fixed_now: datetime) -> None:
+    monkeypatch.setattr(main, "_events", lambda: [])
+    body = main.app.test_client().get("/fucked/").data.decode()
+    assert '<link rel="canonical" href="http://localhost/">' in body
+
+
+def test_calendar_canonical_drops_the_verb(
+    monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
+) -> None:
+    monkeypatch.setattr(main, "_events", lambda: [])
+    body = main.app.test_client().get("/fucked/calendar/2026-05").data.decode()
+    assert '<link rel="canonical" href="http://localhost/calendar/2026-05">' in body
+
+
+def test_canonical_uses_the_configured_host(
+    monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
+) -> None:
+    """In production the canonical must name the real host, not whatever
+    Host header the request arrived with."""
+    monkeypatch.setenv("CANONICAL_HOST", "ismydayfucked.com")
+    monkeypatch.setattr(main, "_events", lambda: [])
+    # Requests to the canonical host itself aren't redirected away.
+    body = (
+        main.app.test_client()
+        .get("/fucked/2026-05-15", headers={"Host": "ismydayfucked.com"})
+        .data.decode()
+    )
+    assert '<link rel="canonical" href="https://ismydayfucked.com/2026-05-15">' in body
+
+
+def test_canonical_does_not_disturb_verb_carrying_links(
+    monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
+) -> None:
+    """The canonical is a crawler hint, not navigation. A visitor who came in
+    on /fucked/ must stay in /fucked/ everywhere they click."""
+    monkeypatch.setattr(main, "_events", lambda: [])
+    body = main.app.test_client().get("/fucked/calendar/2026-05").data.decode()
+    assert 'href="/fucked/2026-05-04"' in body
+    assert 'href="/fucked/calendar/2026-04"' in body
+
+
+def test_robots_keeps_the_calendar_out_of_search() -> None:
+    """Both rules are needed: `/calendar/` doesn't match the verb-prefixed
+    `/fucked/calendar/2026-08`, which doesn't start with `/calendar/`."""
+    body = main.app.test_client().get("/robots.txt").data.decode()
+    assert "Disallow: /calendar/" in body
+    assert "Disallow: /*/calendar/" in body

@@ -1,3 +1,4 @@
+import time
 from unittest.mock import MagicMock
 
 import pytest
@@ -157,3 +158,55 @@ def test_query_filter_excludes_operator_and_cron_paths(
         assert "NOT" in call_filter[max(0, idx - 80) : idx], (
             f"path {path!r} not under a NOT clause in filter:\n{call_filter}"
         )
+
+
+# --- Scan bounds --------------------------------------------------------
+#
+# The scan used to be unbounded: it walked every matching log entry in the
+# window at ~2.75ms each. A GPTBot flood pushed the window to 93k entries,
+# the query to ~182s, and gunicorn killed the worker at its 30s timeout —
+# so /health returned 500 rather than degrading. The endpoint's cost has to
+# be bounded by construction, not by how much traffic the site happened to
+# get.
+
+
+def test_query_stops_at_the_entry_cap(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(stats, "_REQUEST_SCAN_MAX_ENTRIES", 10)
+    fake_client = MagicMock()
+    fake_client.list_entries.return_value = (_http_entry(200) for _ in range(10_000))
+    monkeypatch.setattr(stats, "_logging_client", lambda: fake_client)
+
+    summary = stats._query_request_summary()
+    assert summary.total == 10
+    assert summary.truncated is True
+
+
+def test_query_stops_at_the_deadline(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Entry count alone isn't enough of a bound — a slow API can blow the
+    budget well under the cap."""
+    monkeypatch.setattr(stats, "_REQUEST_SCAN_DEADLINE_SECONDS", 0.05)
+
+    def slow_entries() -> object:
+        for _ in range(10_000):
+            time.sleep(0.001)
+            yield _http_entry(200)
+
+    fake_client = MagicMock()
+    fake_client.list_entries.return_value = slow_entries()
+    monkeypatch.setattr(stats, "_logging_client", lambda: fake_client)
+
+    started = time.monotonic()
+    summary = stats._query_request_summary()
+    assert time.monotonic() - started < 5.0
+    assert summary.truncated is True
+    assert summary.total < 10_000
+
+
+def test_untruncated_scan_is_not_flagged(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_client = MagicMock()
+    fake_client.list_entries.return_value = [_http_entry(200), _http_entry(404)]
+    monkeypatch.setattr(stats, "_logging_client", lambda: fake_client)
+
+    summary = stats.request_summary()
+    assert summary.truncated is False
+    assert summary.total == 2

@@ -269,6 +269,17 @@ a.plain:active {
     background: rgba(0, 0, 0, 0.08);
 }
 
+/* End of the browsable range: the arrow stays put so the header doesn't
+ * reflow, but reads as unavailable and doesn't respond to the cursor. */
+.chev.disabled {
+    opacity: 0.2;
+    cursor: default;
+}
+
+.chev.disabled:hover {
+    background: none;
+}
+
 .cal-grid {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
@@ -316,9 +327,19 @@ a.plain:active {
     border-radius: 50%;
 }
 
-/* Adjacent-month spill: dimmed, but still live links. */
+/* Adjacent-month spill: dimmed, but still live links — unless the day falls
+ * outside the browsable range, in which case the cell is a <span> (see the
+ * calendar template) and must not pretend to be clickable. */
 .cal-day.outside {
     opacity: 0.32;
+}
+
+span.cal-day {
+    cursor: default;
+}
+
+span.cal-day:hover .cal-num {
+    background: none;
 }
 
 .cal-day.is-today .cal-num {
