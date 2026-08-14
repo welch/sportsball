@@ -17,7 +17,7 @@
     <link rel="icon" type="image/png"
           href="{{ vstatic('img/icon-48.png') }}">
   </head>
-  <body>
+  <body{% if nav_hint_class %} class="{{ nav_hint_class }}"{% endif %}>
     <main>
       <h1>Is my day <span class="verb{% if verb_class %} {{ verb_class }}{% endif %}">{{ verb }}?</span></h1>
 
@@ -30,7 +30,7 @@
       </div>
 
       <div class="page-date{% if verb_class %} {{ verb_class }}{% endif %}">
-        <a class="plain" href="{{ calendar_url }}"
+        <a class="plain nav-link" href="{{ calendar_url }}"
            aria-label="See the whole month of {{ status.today.strftime('%B %Y') }}">
           <time datetime="{{ status.today.isoformat() }}">{{ status.today.strftime('%A, %B %-d, %Y') }}</time>
         </a>
@@ -64,8 +64,6 @@
         <p class="verdict">All clear. No future events scheduled.</p>
       {% endif %}
     </main>
-    {% if last_updated %}
-      <footer><a href="{{ url_for('about') }}">last updated {{ last_updated }}</a></footer>
-    {% endif %}
+    <footer><a class="nav-link" href="{{ url_for('about') }}">about</a></footer>
   </body>
 </html>

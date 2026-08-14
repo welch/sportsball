@@ -17,6 +17,7 @@
       li { margin: 0.25em 0; }
       .home-link { display: inline-block; margin-top: 2em; font-size: 0.95em;
                    color: #555; }
+      .updated { font-size: 0.9em; color: #666; }
       .hero { display: block; max-width: 100%; height: auto; margin: 1.5em 0; }
     </style>
   </head>
@@ -39,6 +40,11 @@
           Golden State Valkyries (WNBA) home games, and ticketed concerts /
           family shows</li>
     </ul>
+
+    {% if last_updated %}
+      <p class="updated">Schedules are refreshed daily. This copy last landed
+        {{ last_updated }}.</p>
+    {% endif %}
 
     <h2>...but what about {{ random_city }}?</h2>
     <p>If you want this for another neighborhood, roll your own using

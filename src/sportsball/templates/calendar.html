@@ -20,7 +20,7 @@
     <link rel="icon" type="image/png"
           href="{{ vstatic('img/icon-48.png') }}">
   </head>
-  <body>
+  <body{% if nav_hint_class %} class="{{ nav_hint_class }}"{% endif %}>
     <main>
       <h1><a class="plain" href="{{ home_url }}">Is my month <span class="verb">{{ verb }}?</span></a></h1>
 
@@ -72,8 +72,6 @@
         <span class="swatch dashed"></span> anything else
       </p>
     </main>
-    {% if last_updated %}
-      <footer><a href="{{ url_for('about') }}">last updated {{ last_updated }}</a></footer>
-    {% endif %}
+    <footer><a class="nav-link" href="{{ url_for('about') }}">about</a></footer>
   </body>
 </html>

@@ -260,16 +260,40 @@ def test_index_page_date_reflects_url_isodate(monkeypatch: pytest.MonkeyPatch) -
     assert b"Friday, December 25, 2026" in response.data
 
 
-def test_index_shows_last_updated_footer(
+def test_about_page_shows_the_refresh_time(
     monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
 ) -> None:
+    """The refresh time used to sit in every page's footer, where it read as
+    noise and left the about link named after a timestamp. It belongs on the
+    page that explains where the data comes from."""
     import time as _time
 
     main._cache["events"] = []
     main._cache["fetched_at"] = _time.time()
-    monkeypatch.setattr(main, "_events", lambda: [])
-    response = main.app.test_client().get("/")
-    assert b"last updated " in response.data
+    body = main.app.test_client().get("/about").data.decode()
+    assert 'class="updated"' in body
+    assert "last landed" in body
+    assert main._last_updated_label() in body
+    main._cache["events"] = None
+    main._cache["fetched_at"] = 0.0
+
+
+def test_about_page_loads_the_snapshot_when_cache_is_cold(
+    monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
+) -> None:
+    """A visitor can land on /about first, so the page has to prime the cache
+    itself or it has no refresh time to report."""
+    loaded: list[bool] = []
+
+    def fake_events() -> list:
+        loaded.append(True)
+        main._cache["events"] = []
+        return []
+
+    main._cache["events"] = None
+    monkeypatch.setattr(main, "_events", fake_events)
+    assert main.app.test_client().get("/about").status_code == 200
+    assert loaded == [True]
     main._cache["events"] = None
     main._cache["fetched_at"] = 0.0
 
@@ -277,22 +301,27 @@ def test_index_shows_last_updated_footer(
 def test_index_footer_links_to_about_page(
     monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
 ) -> None:
-    import time as _time
-
-    main._cache["events"] = []
-    main._cache["fetched_at"] = _time.time()
     monkeypatch.setattr(main, "_events", lambda: [])
-    response = main.app.test_client().get("/")
-    body = response.data
-    # Anchor target is now the in-app /about page, not the GitHub repo.
+    body = main.app.test_client().get("/").data
+    # Anchor target is the in-app /about page, not the GitHub repo.
     assert b'href="/about"' in body
-    # Anchor wraps the footer text, not a separate node.
-    assert b'href="/about">last updated ' in body
-    # External-link attributes from the previous version are gone.
+    # Named for where it goes. It used to be named for the timestamp it
+    # carried, which told a first-time visitor nothing about what was there.
+    assert b'href="/about">about</a>' in body
+    # External-link attributes from an earlier version are gone.
     assert b"github.com/welch/sportsball" not in body
     assert b'target="_blank"' not in body
+
+
+def test_footer_survives_a_cold_cache(monkeypatch: pytest.MonkeyPatch, fixed_now: datetime) -> None:
+    """The footer used to render only when there was a timestamp to show, so
+    the site's one link to /about vanished on an instance that had never
+    loaded a snapshot."""
     main._cache["events"] = None
     main._cache["fetched_at"] = 0.0
+    monkeypatch.setattr(main, "_events", lambda: [])
+    assert b'href="/about">about</a>' in main.app.test_client().get("/").data
+    assert b'href="/about">about</a>' in main.app.test_client().get("/calendar/").data
 
 
 def test_about_page_has_repo_link_and_back_link() -> None:
@@ -1509,6 +1538,95 @@ def test_unmapped_host_canonicalizes_to_the_primary(
     monkeypatch.setattr(main, "_events", lambda: [])
     body = main.app.test_client().get("/2026-05-15", headers={"Host": "localhost"}).data.decode()
     assert '<link rel="canonical" href="https://example.com/2026-05-15">' in body
+
+
+# --- Navigation affordances -----------------------------------------------
+#
+# Which links are navigation is a template decision (`.nav-link`); how they
+# look is the stylesheet's. These pin the machinery in between — the body
+# class — and deliberately assert nothing about the visual, so the styles
+# can be reworked in CSS alone.
+
+
+def test_nav_hints_off_by_default(monkeypatch: pytest.MonkeyPatch, fixed_now: datetime) -> None:
+    monkeypatch.setattr(main, "_events", lambda: [])
+    body = main.app.test_client().get("/").data.decode()
+    assert "<body>" in body
+    assert "nav-hints" not in body
+
+
+def test_nav_hints_are_per_host(monkeypatch: pytest.MonkeyPatch, fixed_now: datetime) -> None:
+    """The point of the setting: the domain a stranger is handed can dress
+    its links while the everyday domain stays undressed."""
+    monkeypatch.setattr(main, "_events", lambda: [])
+    monkeypatch.setenv("HOST_VERBS", "example.com=punished, polite.example=bothered")
+    monkeypatch.setenv("NAV_HINTS", "polite.example=chevron")
+    client = main.app.test_client()
+    plain = client.get("/", headers={"Host": "example.com"}).data.decode()
+    hinted = client.get("/", headers={"Host": "polite.example"}).data.decode()
+    assert "nav-hints" not in plain
+    assert '<body class="nav-hints nav-chevron">' in hinted
+
+
+def test_nav_hints_reach_the_calendar_too(
+    monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
+) -> None:
+    monkeypatch.setattr(main, "_events", lambda: [])
+    monkeypatch.setenv("NAV_HINTS", "polite.example=chevron")
+    body = (
+        main.app.test_client()
+        .get("/calendar/2026-05", headers={"Host": "polite.example"})
+        .data.decode()
+    )
+    assert '<body class="nav-hints nav-chevron">' in body
+
+
+def test_nav_query_overrides_the_host_setting(
+    monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
+) -> None:
+    """`?nav=` is how you compare styles on one page without a restart."""
+    monkeypatch.setattr(main, "_events", lambda: [])
+    monkeypatch.delenv("NAV_HINTS", raising=False)
+    client = main.app.test_client()
+    hosted = {"Host": "polite.example"}
+    assert (
+        '<body class="nav-hints nav-chevron">'
+        in client.get("/?nav=chevron", headers=hosted).data.decode()
+    )
+    # Anything the CSS can't draw — `off`, a retired style, a typo, an
+    # injection attempt — falls back to plain rather than reaching the markup.
+    monkeypatch.setenv("NAV_HINTS", "polite.example=chevron")
+    for query in ("?nav=off", "?nav=arrow", "?nav=<script>"):
+        assert "nav-hints" not in client.get(f"/{query}", headers=hosted).data.decode()
+
+
+def test_nav_hints_do_not_reach_the_canonical(
+    monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
+) -> None:
+    """A hinted URL must still name the plain one, or `?nav=` variants land
+    in the index as duplicates."""
+    monkeypatch.setattr(main, "_events", lambda: [])
+    body = main.app.test_client().get("/2026-05-15?nav=chevron").data.decode()
+    assert '<link rel="canonical" href="http://localhost/2026-05-15">' in body
+
+
+def test_nav_links_are_marked_up_for_styling(
+    monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
+) -> None:
+    """The two ways out of the day view — into the month, into the about
+    page — are the links the hint styles have to be able to reach. The
+    about link lives in the footer, which only renders once the cache has
+    a timestamp to show."""
+    import time as _time
+
+    main._cache["events"] = []
+    main._cache["fetched_at"] = _time.time()
+    monkeypatch.setattr(main, "_events", lambda: [])
+    body = main.app.test_client().get("/").data.decode()
+    assert 'class="plain nav-link" href="/calendar/2026-05"' in body
+    assert 'class="nav-link" href="/about"' in body
+    main._cache["events"] = None
+    main._cache["fetched_at"] = 0.0
 
 
 def test_robots_keeps_the_calendar_out_of_search() -> None:

@@ -439,3 +439,71 @@ footer a:active {
         font-size: 11px;
     }
 }
+
+/* Navigation affordances (optional) ---------------------------------------
+ *
+ * The base look leaves links undressed on purpose (see `a.plain`), which is
+ * right for a page somebody visits daily and wrong for one they've never
+ * seen: a first-time reader has to be able to tell the page responds at all.
+ * Adding `nav-hints nav-<style>` to <body> (see `_nav_hint_class`) dresses
+ * every `.nav-link` in that style, so which links are navigation is a
+ * template decision and how they look is entirely this file's.
+ *
+ * The rule is dotted rather than solid to sit nearer the marker-pen hand
+ * than a browser-default underline would. Compare against the undressed
+ * original with `?nav=off`, and see `NAV_HINT_STYLES` for adding a style.
+ */
+
+body.nav-hints a.nav-link,
+body.nav-hints a.nav-link:visited {
+    cursor: pointer;
+    text-decoration: underline;
+    text-decoration-style: dotted;
+    text-decoration-thickness: 2px;
+    text-decoration-color: rgba(0, 0, 0, 0.3);
+    text-underline-offset: 0.18em;
+}
+
+body.nav-hints a.nav-link:hover {
+    text-decoration-style: solid;
+    text-decoration-color: currentColor;
+}
+
+/* The glyph trails the text rather than leading it, which leaves the about
+ * page's `\2190 back to today's verdict` reading as the opposite motion it
+ * is. It lives in CSS, not the templates, so the default look stays free of
+ * it and the whole affordance is one setting away.
+ */
+body.nav-hints a.nav-link::after {
+    /* Not part of the link text, so it mustn't wear the link's rule. */
+    display: inline-block;
+    text-decoration: none;
+    margin-left: 0.28em;
+    opacity: 0.55;
+    transition: opacity 130ms ease-out, transform 130ms ease-out;
+}
+
+body.nav-hints a.nav-link:hover::after {
+    opacity: 1;
+    transform: translateX(0.12em);
+}
+
+/* chevron — the calendar's own paging glyph. Permanent Marker has no
+ * `\2192`, so an arrow drops to a fallback font and lands beside the
+ * marker text as an obviously foreign thin line; `\203A` is in the face,
+ * so it arrives at the right weight in the same hand. Reusing the pager's
+ * glyph is consistency rather than confusion — the site already uses it to
+ * mean "go somewhere". */
+body.nav-chevron a.nav-link::after {
+    content: "\203A";
+}
+
+@media (prefers-reduced-motion: reduce) {
+    body.nav-hints a.nav-link::after {
+        transition: none;
+    }
+
+    body.nav-hints a.nav-link:hover::after {
+        transform: none;
+    }
+}

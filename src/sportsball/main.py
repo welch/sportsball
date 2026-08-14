@@ -135,34 +135,70 @@ log = logging.getLogger(__name__)
 _LOCAL_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0"}
 
 
+def _host_map(var: str) -> dict[str, str]:
+    """Parse a `host=value, host=value` environment variable into a map.
+
+    The grammar both per-domain settings share (`HOST_VERBS`, `NAV_HINTS`).
+    Hosts are lowercased for matching; malformed entries are dropped rather
+    than raised on, so a typo in one domain doesn't take the site down for
+    the others.
+
+    Read per request rather than frozen into a constant, for the reason
+    `_repo_url` explains: `env.yaml` lands in `os.environ` at import.
+    """
+    mapping: dict[str, str] = {}
+    for chunk in os.environ.get(var, "").split(","):
+        host, sep, value = chunk.partition("=")
+        host, value = host.strip().lower(), value.strip()
+        if sep and host and value:
+            mapping[host] = value
+    return mapping
+
+
 def _host_verbs() -> dict[str, str]:
-    """Parse `$HOST_VERBS` — the domains this app answers to, and the verb
-    each one renders: `"ismydayfucked.com=fucked, ismydayhosed.fun=hosed"`.
+    """The domains this app answers to, and the verb each one renders:
+    `"ismydayfucked.com=fucked, ismydayhosed.fun=hosed"`.
 
     One deployment serves every domain in the map. The pages differ only in
     the word, which is the whole point: the same site can be linked from a
     résumé without the profanity, or from anywhere else with it.
 
     Order matters. The first entry is the primary host — where unrecognized
-    hosts get redirected, and whose verb an unmapped host renders. Malformed
-    entries are dropped rather than raised on: a typo in one domain
-    shouldn't take the site down for the others.
-
-    Read per request rather than frozen into a constant, for the reason
-    `_repo_url` explains: `env.yaml` lands in `os.environ` at import.
+    hosts get redirected, and whose verb an unmapped host renders.
     """
-    mapping: dict[str, str] = {}
-    for chunk in os.environ.get("HOST_VERBS", "").split(","):
-        host, sep, verb = chunk.partition("=")
-        host, verb = host.strip().lower(), verb.strip()
-        if sep and host and verb:
-            mapping[host] = verb
-    return mapping
+    return _host_map("HOST_VERBS")
 
 
 def _request_host() -> str:
     """Requested hostname, lowercased with any port stripped, for map lookups."""
     return request.host.split(":", 1)[0].lower()
+
+
+# Nav-hint styles the CSS knows how to draw. The names are the contract
+# between `$NAV_HINTS` and `8ball.css`; adding one means adding a
+# `.nav-<name>` block there and a word here. Anything else — an unknown
+# style, `?nav=off` — renders no hints at all, which is the default look.
+NAV_HINT_STYLES = ("chevron",)
+
+
+def _nav_hint_class() -> str:
+    """Body class that turns on visible affordances for `.nav-link` elements,
+    or "" for the default look.
+
+    The site's links are deliberately undressed — a blue underline would
+    wreck the hand-drawn hand — but that leaves a first-time visitor with
+    nothing saying the page responds at all. On a domain being handed to
+    someone who has never seen the site (a résumé link), the affordance is
+    worth more than the restraint, so it's per-host: `$NAV_HINTS` reads
+    `"ismydayhosed.fun=chevron"`.
+
+    `?nav=<style>` overrides for a request, which is how you compare styles
+    on one page without editing `env.yaml` and restarting. It doesn't leak
+    into search: the canonical tag is built from the path alone, so a
+    hinted URL still names the plain one.
+    """
+    style = request.args.get("nav") or _host_map("NAV_HINTS").get(_request_host(), "")
+    return f"nav-hints nav-{style}" if style in NAV_HINT_STYLES else ""
 
 
 def _default_verb() -> str:
@@ -452,7 +488,7 @@ def index(isodate: date | None = None) -> str:
         verb_class=_verb_color_class(status.today_events),
         quiet_label=quiet_label,
         next_event_label=next_event_label,
-        last_updated=_last_updated_label(),
+        nav_hint_class=_nav_hint_class(),
         calendar_url=url_for("month_calendar", ym=status.today.replace(day=1)),
         canonical_url=(
             _canonical_url("index", isodate=isodate)
@@ -498,7 +534,7 @@ def month_calendar(ym: date | None = None) -> str:
         next_label=view.next_month.strftime("%B %Y"),
         home_url=url_for("index"),
         day_url=day_url,
-        last_updated=_last_updated_label(),
+        nav_hint_class=_nav_hint_class(),
         # Bare month URL even when `ym` came from the bare `/calendar/`
         # route, so `/calendar/` and `/calendar/2026-08` don't compete.
         canonical_url=_canonical_url("month_calendar", ym=month),
@@ -632,9 +668,17 @@ def about() -> str:
     """Plain-language explanation of what the site does. The footer links
     here so casual visitors don't get dumped straight into a code repo.
     """
+    # The footer used to carry the refresh time on every page, where it
+    # read as noise. It lives here now, which means this page has to load
+    # the snapshot itself — the day and month views populate the cache on
+    # their way past, and a visitor can land here first. Same reasoning as
+    # `/health/<token>`, and the same one-per-instance cost.
+    if _cache["events"] is None:
+        _events()
     return render_template(
         "about.html",
         random_city=random.choice(MLB_CITIES),
+        last_updated=_last_updated_label(),
         canonical_url=_canonical_url("about"),
     )
 

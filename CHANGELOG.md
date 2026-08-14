@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `NAV_HINTS`, per-domain navigation affordances. The site's links are
+  undressed on purpose — a blue underline would wreck the marker-pen hand —
+  which is right for a page someone visits daily and wrong for one they've
+  never seen, where nothing says the page responds at all. A domain handed
+  to a stranger can now dress the links carrying a `nav-link` class (the
+  date → month, the footer → about) while the everyday domain stays as it
+  was. The one style, `chevron`, is a dotted rule that firms up on hover,
+  trailing the `›` the calendar's pager already uses — Permanent Marker
+  has no `→`, so an arrow drops to a fallback font and lands beside the
+  marker text as an obviously foreign thin line, while `›` is in the face
+  and arrives in the same hand. Which links are navigation is a template
+  decision and how they look is entirely `8ball.css`'s, so reworking the
+  visual doesn't touch Python. `?nav=<style>` overrides for one request —
+  `?nav=off` for the undressed original — which is how to try one without
+  a restart. The canonical tag is built from the path alone, so the query
+  variants stay out of search.
 - `HOST_VERBS` — a map from domain to verb (`ismydayfucked.com=fucked,
   ismydayhosed.fun=hosed`), so one deployment serves several domains that
   differ only in the word they render. The second domain exists to be
@@ -22,6 +38,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The footer link is now called "about" rather than named after the
+  timestamp it carried ("last updated Thu Aug 13, 6:00 AM PDT"), which told
+  a first-time visitor nothing about where the link went. It also renders
+  unconditionally: it used to appear only when the cache had a timestamp to
+  show, so the site's one link to `/about` vanished on an instance that had
+  never loaded a snapshot.
+- The refresh time moved to the about page, under what the site tracks,
+  where a visitor asking how current the data is will actually be looking.
+  The page now primes the event cache the way `/health/<token>` does, since
+  a visitor can land there first and it would otherwise have no time to
+  report. Operators still get the precise picture on the health page.
 - Each configured domain now canonicalizes to itself rather than to a
   single host. Folding them together would consolidate the search signal,
   but it would also mean someone who found the polite domain in search got
