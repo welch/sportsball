@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `HOST_VERBS` — a map from domain to verb (`ismydayfucked.com=fucked,
+  ismydayhosed.fun=hosed`), so one deployment serves several domains that
+  differ only in the word they render. The second domain exists to be
+  linkable from a résumé; a second App Engine service would have meant a
+  duplicated config and a second set of instances drawing down the same
+  per-app free instance-hour quota, for a one-word difference. Any host
+  outside the map is 301-redirected to the first entry, which keeps
+  consolidating appspot.com, bare IPs and stale aliases onto the real
+  domain. Unmapped hosts render the first entry's verb, so local dev still
+  looks like the live site.
+
+### Changed
+
+- Each configured domain now canonicalizes to itself rather than to a
+  single host. Folding them together would consolidate the search signal,
+  but it would also mean someone who found the polite domain in search got
+  pointed at the impolite one — the one thing the polite domain exists to
+  prevent. The pages aren't true duplicates anyway; the verb differs
+  throughout.
+
+### Removed
+
+- The verb path segment (`/fucked/`, `/fucked/2026-12-25`,
+  `/fucked/calendar/2026-12`), inherited from a mirroring scheme the host
+  no longer supports. Nothing in the site linked to it and the domain
+  carries the verb now, but `VerbConverter` matched any letters-only
+  segment, which made every page reachable at unboundedly many URLs — the
+  reason the canonical tags had to strip a path segment and robots.txt
+  needed a second `/*/calendar/` rule. All of that goes with it, along with
+  `_nav_urls`, which existed only to thread the visitor's verb through
+  every in-page link. Those URLs now 404.
+- `VERB` and `CANONICAL_HOST`, both subsumed by `HOST_VERBS`. A deployment
+  carrying the old pair loses its redirect and falls back to the default
+  verb (`hosed`) until the new variable is set.
+
 ## [0.7.0] - 2026-08-09
 
 ### Fixed

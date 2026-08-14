@@ -173,10 +173,25 @@ def test_index_future_event_tomorrow(monkeypatch: pytest.MonkeyPatch, fixed_now:
     assert b">tomorrow<" in response.data
 
 
-def test_index_verb_default_from_env(monkeypatch: pytest.MonkeyPatch, fixed_now: datetime) -> None:
+def test_index_verb_comes_from_the_requested_host(
+    monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
+) -> None:
+    """One deployment, two domains, one word of difference."""
     monkeypatch.setattr(main, "_events", lambda: [])
-    monkeypatch.setenv("VERB", "punished")
-    response = main.app.test_client().get("/")
+    monkeypatch.setenv("HOST_VERBS", "example.com=punished, polite.example=bothered")
+    client = main.app.test_client()
+    assert b"Is my day punished?" in client.get("/", headers={"Host": "example.com"}).data
+    assert b"Is my day bothered?" in client.get("/", headers={"Host": "polite.example"}).data
+
+
+def test_index_verb_falls_back_to_the_primary_host(
+    monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
+) -> None:
+    """localhost isn't in the map and isn't redirected, so it has to borrow a
+    verb — the primary host's, so local dev shows what the live site shows."""
+    monkeypatch.setattr(main, "_events", lambda: [])
+    monkeypatch.setenv("HOST_VERBS", "example.com=punished, polite.example=bothered")
+    response = main.app.test_client().get("/", headers={"Host": "localhost:5000"})
     assert b"Is my day punished?" in response.data
 
 
@@ -184,17 +199,31 @@ def test_index_verb_default_when_env_unset(
     monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
 ) -> None:
     monkeypatch.setattr(main, "_events", lambda: [])
-    monkeypatch.delenv("VERB", raising=False)
+    monkeypatch.delenv("HOST_VERBS", raising=False)
     response = main.app.test_client().get("/")
     assert b"Is my day hosed?" in response.data
 
 
-def test_index_url_verb_overrides_env(monkeypatch: pytest.MonkeyPatch, fixed_now: datetime) -> None:
+def test_host_verbs_ignores_malformed_entries(
+    monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
+) -> None:
+    """A typo in one domain must not take the site down for the others."""
     monkeypatch.setattr(main, "_events", lambda: [])
-    monkeypatch.setenv("VERB", "punished")
-    response = main.app.test_client().get("/fucked/")
-    assert b"Is my day fucked?" in response.data
-    assert b"punished" not in response.data
+    monkeypatch.setenv("HOST_VERBS", " , example.com=punished ,noequals, =novrb, host=")
+    with main.app.test_request_context("/", headers={"Host": "example.com"}):
+        assert main._host_verbs() == {"example.com": "punished"}
+    response = main.app.test_client().get("/", headers={"Host": "example.com"})
+    assert b"Is my day punished?" in response.data
+
+
+def test_host_verbs_lookup_ignores_case_and_port(
+    monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
+) -> None:
+    monkeypatch.setattr(main, "_events", lambda: [])
+    monkeypatch.setenv("HOST_VERBS", "Example.COM=punished")
+    response = main.app.test_client().get("/", headers={"Host": "EXAMPLE.com:8080"})
+    assert response.status_code == 200
+    assert b"Is my day punished?" in response.data
 
 
 def test_index_has_viewport_meta(monkeypatch: pytest.MonkeyPatch, fixed_now: datetime) -> None:
@@ -528,11 +557,23 @@ def test_index_specific_date_uses_that_date_as_today(
     assert b"halo-giants" in response.data
 
 
-def test_index_specific_date_with_verb(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_index_specific_date_carries_the_host_verb(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(main, "_events", lambda: [])
-    response = main.app.test_client().get("/fucked/2026-05-15")
+    monkeypatch.setenv("HOST_VERBS", "example.com=punished")
+    response = main.app.test_client().get("/2026-05-15", headers={"Host": "example.com"})
     assert response.status_code == 200
-    assert b"Is my day fucked?" in response.data
+    assert b"Is my day punished?" in response.data
+
+
+def test_verb_path_segments_are_gone(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The URL verb was a mirroring-scheme leftover: it made every page
+    reachable at unboundedly many URLs, which is what forced the canonical
+    tags and the extra robots rule. The domain carries the verb now."""
+    monkeypatch.setattr(main, "_events", lambda: [])
+    client = main.app.test_client()
+    assert client.get("/fucked/").status_code == 404
+    assert client.get("/fucked/2026-05-15").status_code == 404
+    assert client.get("/fucked/calendar/2026-05").status_code == 404
 
 
 def test_index_invalid_date_404(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -660,27 +701,30 @@ def test_index_both_venues_active_gives_neutral_verb(
     assert b'class="verb warriors"' not in response.data
 
 
-def test_canonical_host_no_redirect_when_host_matches(
+def test_no_redirect_for_any_mapped_host(
     monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
 ) -> None:
-    monkeypatch.setenv("CANONICAL_HOST", "example.com")
+    """Every domain in the map serves itself. Redirecting the secondary to
+    the primary would defeat the point of having a second domain."""
+    monkeypatch.setenv("HOST_VERBS", "example.com=punished, polite.example=bothered")
     monkeypatch.setattr(main, "_events", lambda: [])
-    response = main.app.test_client().get("/", headers={"Host": "example.com"})
-    assert response.status_code == 200
+    client = main.app.test_client()
+    assert client.get("/", headers={"Host": "example.com"}).status_code == 200
+    assert client.get("/", headers={"Host": "polite.example"}).status_code == 200
 
 
-def test_canonical_host_redirects_non_canonical_host(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("CANONICAL_HOST", "example.com")
+def test_unmapped_host_redirects_to_the_primary(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("HOST_VERBS", "example.com=punished, polite.example=bothered")
     response = main.app.test_client().get("/", headers={"Host": "sports-ball.appspot.com"})
     assert response.status_code == 301
     # Werkzeug normalizes a bare trailing "?" off the Location URL.
     assert response.headers["Location"].rstrip("?") == "https://example.com/"
 
 
-def test_canonical_host_redirect_preserves_query_string(
+def test_unmapped_host_redirect_preserves_query_string(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("CANONICAL_HOST", "example.com")
+    monkeypatch.setenv("HOST_VERBS", "example.com=punished")
     response = main.app.test_client().get(
         "/some/path?foo=bar", headers={"Host": "sports-ball.appspot.com"}
     )
@@ -689,8 +733,8 @@ def test_canonical_host_redirect_preserves_query_string(
     assert response.headers["Location"] == "https://example.com/some/path?foo=bar"
 
 
-def test_canonical_host_does_not_redirect_healthz(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("CANONICAL_HOST", "example.com")
+def test_unmapped_host_does_not_redirect_healthz(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("HOST_VERBS", "example.com=punished")
     response = main.app.test_client().get("/healthz", headers={"Host": "sports-ball.appspot.com"})
     assert response.status_code == 200
     assert response.data == b"ok"
@@ -832,22 +876,22 @@ def test_health_page_links_timestamp_to_that_days_page(
     assert 'href="/2026-05-04"' in response.data.decode()
 
 
-def test_canonical_host_does_not_redirect_localhost(
+def test_unmapped_host_does_not_redirect_localhost(
     monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
 ) -> None:
     """Dev convenience: localhost requests skip the redirect even when
-    CANONICAL_HOST is set, so a dev whose local env.yaml carries the prod
-    canonical can still hit http://localhost:PORT without bouncing.
+    HOST_VERBS is set, so a dev whose local env.yaml carries the prod map
+    can still hit http://localhost:PORT without bouncing.
     """
-    monkeypatch.setenv("CANONICAL_HOST", "example.com")
+    monkeypatch.setenv("HOST_VERBS", "example.com=punished")
     monkeypatch.setattr(main, "_events", lambda: [])
     for host in ("localhost:5071", "127.0.0.1:5071", "localhost", "0.0.0.0:8080"):
         response = main.app.test_client().get("/", headers={"Host": host})
         assert response.status_code == 200, f"unexpected redirect for Host: {host}"
 
 
-def test_canonical_host_does_not_redirect_cron(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("CANONICAL_HOST", "example.com")
+def test_unmapped_host_does_not_redirect_cron(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("HOST_VERBS", "example.com=punished")
     monkeypatch.setattr(main, "_events", lambda: [])
     response = main.app.test_client().get(
         "/tasks/refresh",
@@ -859,10 +903,10 @@ def test_canonical_host_does_not_redirect_cron(monkeypatch: pytest.MonkeyPatch) 
     main._cache["fetched_at"] = 0.0
 
 
-def test_canonical_host_unset_never_redirects(
+def test_host_verbs_unset_never_redirects(
     monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
 ) -> None:
-    monkeypatch.delenv("CANONICAL_HOST", raising=False)
+    monkeypatch.delenv("HOST_VERBS", raising=False)
     monkeypatch.setattr(main, "_events", lambda: [])
     response = main.app.test_client().get("/", headers={"Host": "localhost:5000"})
     assert response.status_code == 200
@@ -987,12 +1031,16 @@ def test_index_date_link_for_explicit_date_uses_that_month(
     assert b'href="/calendar/2026-12"' in response.data
 
 
-def test_index_date_link_preserves_url_verb(
+def test_index_date_link_is_a_bare_path(
     monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
 ) -> None:
+    """Links stay host-relative, so a visitor never leaves the domain they
+    arrived on — and the verb follows for free."""
     monkeypatch.setattr(main, "_events", lambda: [])
-    response = main.app.test_client().get("/fucked/")
-    assert b'href="/fucked/calendar/2026-05"' in response.data
+    monkeypatch.setenv("HOST_VERBS", "example.com=punished, polite.example=bothered")
+    response = main.app.test_client().get("/", headers={"Host": "polite.example"})
+    assert b'href="/calendar/2026-05"' in response.data
+    assert b"example.com" not in response.data
 
 
 def test_calendar_renders_month_grid(monkeypatch: pytest.MonkeyPatch, fixed_now: datetime) -> None:
@@ -1034,15 +1082,15 @@ def test_calendar_chevrons_wrap_across_the_year(
     assert b'href="/calendar/2026-02"' in body
 
 
-def test_calendar_chevrons_preserve_verb(
+def test_calendar_carries_the_host_verb(
     monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
 ) -> None:
     monkeypatch.setattr(main, "_events", lambda: [])
-    body = main.app.test_client().get("/fucked/calendar/2026-05").data
-    assert b'href="/fucked/calendar/2026-04"' in body
-    assert b'href="/fucked/calendar/2026-06"' in body
-    # And clicking a day keeps the verb too.
-    assert b'href="/fucked/2026-05-04"' in body
+    monkeypatch.setenv("HOST_VERBS", "example.com=punished, polite.example=bothered")
+    body = main.app.test_client().get("/calendar/2026-05", headers={"Host": "polite.example"}).data
+    assert b"Is my month bothered?" in body
+    assert b'href="/calendar/2026-04"' in body
+    assert b'href="/2026-05-04"' in body
 
 
 def test_calendar_day_wears_event_halos(
@@ -1419,23 +1467,14 @@ def test_health_does_not_mark_a_complete_scan(monkeypatch: pytest.MonkeyPatch) -
 
 # --- Canonical URLs -------------------------------------------------------
 #
-# `VerbConverter` matches any letters-only segment, so every page is
-# reachable at unboundedly many URLs (`/fucked/`, `/banana/`, …). Nothing
-# links to an arbitrary verb, so a crawler starting at `/` never finds them
-# — but one shared `/fucked/` link puts that whole subtree in the index as
-# duplicate content. The canonical tag folds them onto the bare URL without
-# touching the in-page links, which must keep carrying the visitor's verb.
+# Each domain in HOST_VERBS self-canonicalizes. Folding them all onto the
+# primary would consolidate the search signal, but it would also mean a
+# searcher who found the polite domain got pointed at the impolite one —
+# which is the one thing the polite domain exists to prevent. Everything
+# else (appspot, an IP, a stale alias) names the primary instead of itself.
 
 
-def test_day_view_canonical_drops_the_verb(
-    monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
-) -> None:
-    monkeypatch.setattr(main, "_events", lambda: [])
-    body = main.app.test_client().get("/fucked/2026-05-15").data.decode()
-    assert '<link rel="canonical" href="http://localhost/2026-05-15">' in body
-
-
-def test_bare_day_view_canonical_points_at_itself(
+def test_day_view_canonical_points_at_itself(
     monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
 ) -> None:
     monkeypatch.setattr(main, "_events", lambda: [])
@@ -1445,48 +1484,33 @@ def test_bare_day_view_canonical_points_at_itself(
 
 def test_index_canonical_is_the_root(monkeypatch: pytest.MonkeyPatch, fixed_now: datetime) -> None:
     monkeypatch.setattr(main, "_events", lambda: [])
-    body = main.app.test_client().get("/fucked/").data.decode()
+    body = main.app.test_client().get("/").data.decode()
     assert '<link rel="canonical" href="http://localhost/">' in body
 
 
-def test_calendar_canonical_drops_the_verb(
+def test_each_mapped_host_canonicalizes_to_itself(
     monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
 ) -> None:
+    monkeypatch.setenv("HOST_VERBS", "example.com=punished, polite.example=bothered")
     monkeypatch.setattr(main, "_events", lambda: [])
-    body = main.app.test_client().get("/fucked/calendar/2026-05").data.decode()
-    assert '<link rel="canonical" href="http://localhost/calendar/2026-05">' in body
+    client = main.app.test_client()
+    for host in ("example.com", "polite.example"):
+        for path in ("/2026-05-15", "/calendar/2026-05"):
+            body = client.get(path, headers={"Host": host}).data.decode()
+            assert f'<link rel="canonical" href="https://{host}{path}">' in body
 
 
-def test_canonical_uses_the_configured_host(
+def test_unmapped_host_canonicalizes_to_the_primary(
     monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
 ) -> None:
-    """In production the canonical must name the real host, not whatever
-    Host header the request arrived with."""
-    monkeypatch.setenv("CANONICAL_HOST", "ismydayfucked.com")
+    """A page served on an unmapped host — a localhost preview, a health
+    check — still names the real site rather than itself."""
+    monkeypatch.setenv("HOST_VERBS", "example.com=punished, polite.example=bothered")
     monkeypatch.setattr(main, "_events", lambda: [])
-    # Requests to the canonical host itself aren't redirected away.
-    body = (
-        main.app.test_client()
-        .get("/fucked/2026-05-15", headers={"Host": "ismydayfucked.com"})
-        .data.decode()
-    )
-    assert '<link rel="canonical" href="https://ismydayfucked.com/2026-05-15">' in body
-
-
-def test_canonical_does_not_disturb_verb_carrying_links(
-    monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
-) -> None:
-    """The canonical is a crawler hint, not navigation. A visitor who came in
-    on /fucked/ must stay in /fucked/ everywhere they click."""
-    monkeypatch.setattr(main, "_events", lambda: [])
-    body = main.app.test_client().get("/fucked/calendar/2026-05").data.decode()
-    assert 'href="/fucked/2026-05-04"' in body
-    assert 'href="/fucked/calendar/2026-04"' in body
+    body = main.app.test_client().get("/2026-05-15", headers={"Host": "localhost"}).data.decode()
+    assert '<link rel="canonical" href="https://example.com/2026-05-15">' in body
 
 
 def test_robots_keeps_the_calendar_out_of_search() -> None:
-    """Both rules are needed: `/calendar/` doesn't match the verb-prefixed
-    `/fucked/calendar/2026-08`, which doesn't start with `/calendar/`."""
     body = main.app.test_client().get("/robots.txt").data.decode()
     assert "Disallow: /calendar/" in body
-    assert "Disallow: /*/calendar/" in body

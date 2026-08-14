@@ -125,15 +125,8 @@ class MonthConverter(BaseConverter):
         return f"{value.year:04d}-{value.month:02d}"
 
 
-class VerbConverter(BaseConverter):
-    """Letters-only verb path segment, so `/2026-05-15` can't be misread as a verb."""
-
-    regex = r"[a-zA-Z]+"
-
-
 app = Flask(__name__)
 app.url_map.converters["isodate"] = IsoDateConverter
-app.url_map.converters["verb"] = VerbConverter
 app.url_map.converters["month"] = MonthConverter
 
 log = logging.getLogger(__name__)
@@ -142,27 +135,70 @@ log = logging.getLogger(__name__)
 _LOCAL_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0"}
 
 
-@app.before_request
-def _redirect_to_canonical_host() -> Response | None:
-    """301-redirect non-canonical hosts to `CANONICAL_HOST`.
+def _host_verbs() -> dict[str, str]:
+    """Parse `$HOST_VERBS` — the domains this app answers to, and the verb
+    each one renders: `"ismydayfucked.com=fucked, ismydayhosed.fun=hosed"`.
 
-    No-ops when `CANONICAL_HOST` is unset (local dev). Also skips when the
-    request is to a localhost address — so a developer with the production
-    canonical configured in their local `env.yaml` can still hit
-    `http://localhost:5000` without bouncing to the production domain.
-    Skips `/healthz` and GAE cron requests so they keep working on the
-    appspot host.
+    One deployment serves every domain in the map. The pages differ only in
+    the word, which is the whole point: the same site can be linked from a
+    résumé without the profanity, or from anywhere else with it.
+
+    Order matters. The first entry is the primary host — where unrecognized
+    hosts get redirected, and whose verb an unmapped host renders. Malformed
+    entries are dropped rather than raised on: a typo in one domain
+    shouldn't take the site down for the others.
+
+    Read per request rather than frozen into a constant, for the reason
+    `_repo_url` explains: `env.yaml` lands in `os.environ` at import.
     """
-    canonical = os.environ.get("CANONICAL_HOST")
-    if not canonical or request.host == canonical:
+    mapping: dict[str, str] = {}
+    for chunk in os.environ.get("HOST_VERBS", "").split(","):
+        host, sep, verb = chunk.partition("=")
+        host, verb = host.strip().lower(), verb.strip()
+        if sep and host and verb:
+            mapping[host] = verb
+    return mapping
+
+
+def _request_host() -> str:
+    """Requested hostname, lowercased with any port stripped, for map lookups."""
+    return request.host.split(":", 1)[0].lower()
+
+
+def _default_verb() -> str:
+    """The verb this request's host asks for.
+
+    A mapped host gets its own verb. Anything else — localhost, appspot,
+    a health check — gets the primary host's, so local dev shows what the
+    live site shows. With no map configured at all, the neutral `hosed`.
+    """
+    hosts = _host_verbs()
+    return hosts.get(_request_host()) or next(iter(hosts.values()), "hosed")
+
+
+@app.before_request
+def _redirect_to_known_host() -> Response | None:
+    """301-redirect hosts outside `$HOST_VERBS` to the primary one.
+
+    The map's own domains each serve themselves; everything else (appspot,
+    a bare IP, a stale alias) is consolidated onto the first entry. No-ops
+    when `HOST_VERBS` is unset (local dev). Also skips localhost addresses,
+    so a developer whose local `env.yaml` carries the production map can
+    still hit `http://localhost:5000` without bouncing to production. Skips
+    `/healthz` and GAE cron requests so they keep working on the appspot
+    host.
+    """
+    hosts = _host_verbs()
+    if not hosts:
         return None
-    if request.host.split(":", 1)[0] in _LOCAL_HOSTS:
+    host = _request_host()
+    if host in hosts or host in _LOCAL_HOSTS:
         return None
     if request.path == "/healthz":
         return None
     if request.headers.get("X-Appengine-Cron") == "true":
         return None
-    return redirect(f"https://{canonical}{request.full_path}", code=301)
+    return redirect(f"https://{next(iter(hosts))}{request.full_path}", code=301)
 
 
 def _compute_static_hash() -> str:
@@ -348,24 +384,25 @@ def _verb_color_class(today_events: list[Event]) -> str:
 
 
 def _canonical_url(endpoint: str, **values: Any) -> str:
-    """Absolute URL for `endpoint` with the verb deliberately left off.
+    """Absolute URL for `endpoint` on the host that should own this page.
 
-    `VerbConverter` matches any letters-only segment, so `/fucked/`,
-    `/banana/` and every other word render the same page — an unbounded set
-    of URLs for one piece of content. Nothing on the site links to an
-    arbitrary verb, so a crawler starting at `/` never wanders in, but a
-    single shared `/fucked/` link is enough to pull that whole subtree into
-    the index as duplicates. Pointing every variant at the bare URL
-    consolidates them.
+    Each domain in `$HOST_VERBS` self-canonicalizes. The alternative —
+    folding every domain onto the primary — would consolidate the search
+    signal, but it would also mean someone who found the polite domain in
+    search got pointed at the impolite one, which defeats the reason the
+    polite one exists. Near-duplicates across two hosts are a small price;
+    the rendered verb differs on every page anyway.
 
-    Built against `$CANONICAL_HOST` when set, so the tag names the real
-    domain rather than whichever Host header showed up (appspot.com, an IP,
-    a stale alias). Falls back to the request host for local dev.
+    An unmapped host (appspot.com, an IP, a stale alias) names the primary
+    domain instead of itself, so a page served on one of those still points
+    at the real site. Falls back to the request host when no map is
+    configured, for local dev.
     """
-    canonical_host = os.environ.get("CANONICAL_HOST")
-    if canonical_host:
-        return f"https://{canonical_host}{url_for(endpoint, **values)}"
-    return url_for(endpoint, _external=True, **values)
+    hosts = _host_verbs()
+    if not hosts:
+        return url_for(endpoint, _external=True, **values)
+    host = _request_host() if _request_host() in hosts else next(iter(hosts))
+    return f"https://{host}{url_for(endpoint, **values)}"
 
 
 def _browse_range() -> tuple[date, date]:
@@ -384,32 +421,10 @@ def _in_browse_range(d: date) -> bool:
     return earliest <= d <= latest
 
 
-def _nav_urls(verb: str | None) -> Any:
-    """Build a URL helper that carries an explicit verb across navigation.
-
-    `verb` here is the *path* verb — None when the visitor came in on a
-    bare URL and the verb is coming from `$VERB`. Threading it through
-    means someone who arrived at `/fucked/` stays in `/fucked/` when they
-    click into the calendar and back out to a day, instead of silently
-    reverting to the deployed default.
-    """
-
-    def to(endpoint: str, **values: Any) -> str:
-        if verb is not None:
-            values["verb"] = verb
-        return url_for(endpoint, **values)
-
-    return to
-
-
 @app.get("/")
-@app.get("/<verb:verb>/")
 @app.get("/<isodate:isodate>")
-@app.get("/<verb:verb>/<isodate:isodate>")
-def index(verb: str | None = None, isodate: date | None = None) -> str:
-    url = _nav_urls(verb)
-    if verb is None:
-        verb = os.environ.get("VERB", "hosed")
+def index(isodate: date | None = None) -> str:
+    verb = _default_verb()
     if isodate is not None:
         if not _in_browse_range(isodate):
             abort(404)
@@ -438,7 +453,7 @@ def index(verb: str | None = None, isodate: date | None = None) -> str:
         quiet_label=quiet_label,
         next_event_label=next_event_label,
         last_updated=_last_updated_label(),
-        calendar_url=url("month_calendar", ym=status.today.replace(day=1)),
+        calendar_url=url_for("month_calendar", ym=status.today.replace(day=1)),
         canonical_url=(
             _canonical_url("index", isodate=isodate)
             if isodate is not None
@@ -449,9 +464,7 @@ def index(verb: str | None = None, isodate: date | None = None) -> str:
 
 @app.get("/calendar/")
 @app.get("/calendar/<month:ym>")
-@app.get("/<verb:verb>/calendar/")
-@app.get("/<verb:verb>/calendar/<month:ym>")
-def month_calendar(verb: str | None = None, ym: date | None = None) -> str:
+def month_calendar(ym: date | None = None) -> str:
     """Month grid where each day wears the same colored rings as the 8-ball.
 
     Clicking a day drops into the 8-ball view for that date; the chevrons
@@ -461,9 +474,6 @@ def month_calendar(verb: str | None = None, ym: date | None = None) -> str:
     edges the chevron and the spill-over day cells render as dead text
     rather than links, so there's nothing to follow past the boundary.
     """
-    url = _nav_urls(verb)
-    if verb is None:
-        verb = os.environ.get("VERB", "hosed")
     today = datetime.now(tz=PT).date()
     month = ym if ym is not None else today.replace(day=1)
     if not _in_browse_range(month):
@@ -471,14 +481,14 @@ def month_calendar(verb: str | None = None, ym: date | None = None) -> str:
     view = month_view(_events(), month, today)
 
     def month_url(target: date) -> str | None:
-        return url("month_calendar", ym=target) if _in_browse_range(target) else None
+        return url_for("month_calendar", ym=target) if _in_browse_range(target) else None
 
     def day_url(d: date) -> str | None:
-        return url("index", isodate=d) if _in_browse_range(d) else None
+        return url_for("index", isodate=d) if _in_browse_range(d) else None
 
     return render_template(
         "calendar.html",
-        verb=verb,
+        verb=_default_verb(),
         view=view,
         weekday_labels=WEEKDAY_LABELS,
         month_label=month.strftime("%B %Y"),
@@ -486,7 +496,7 @@ def month_calendar(verb: str | None = None, ym: date | None = None) -> str:
         next_url=month_url(view.next_month),
         prev_label=view.prev_month.strftime("%B %Y"),
         next_label=view.next_month.strftime("%B %Y"),
-        home_url=url("index"),
+        home_url=url_for("index"),
         day_url=day_url,
         last_updated=_last_updated_label(),
         # Bare month URL even when `ym` came from the bare `/calendar/`
@@ -599,21 +609,15 @@ def healthz() -> tuple[str, int]:
 
 # Operator endpoints, plus the month view — it exists to be clicked from the
 # day page, not found cold in search results, and it's the densest part of
-# the crawlable space. Both calendar rules are needed: `/calendar/` matches
-# only paths that start that way, so the verb-prefixed
-# `/fucked/calendar/2026-08` needs the wildcard form.
+# the crawlable space.
 #
-# Day views stay crawlable, with their verb variants folded onto the bare URL
-# by `_canonical_url` rather than blocked here — robots.txt would stop the
-# fetch but not the indexing, and a blocked URL can still surface with no
-# description. `Crawl-delay` is advisory and Google ignores it outright, so
-# the real defence remains `_browse_range`, not this file.
+# Day views stay crawlable. `Crawl-delay` is advisory and Google ignores it
+# outright, so the real defence remains `_browse_range`, not this file.
 ROBOTS_TXT = """User-agent: *
 Disallow: /health/
 Disallow: /healthz
 Disallow: /tasks/
 Disallow: /calendar/
-Disallow: /*/calendar/
 Crawl-delay: 10
 """
 
