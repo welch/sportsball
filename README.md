@@ -27,13 +27,17 @@ URL patterns:
 | `/2026-12-25` | Show what's scheduled for any other date |
 | `/calendar/` | Month view of the current month |
 | `/calendar/2026-12` | Month view of any month |
+| `/about` | What the site tracks, and how current the data is |
 | `/health/<token>` | Operator status page (token-gated, 404s on mismatch) |
 
 The verb in the title comes from the domain the request arrived on, so one
 deployment can serve both a blunt domain and a polite one for locales with
 sensitive ears. See `HOST_VERBS` below.
 
-Navigate between day and month views by clicking a date on either.
+Navigate between day and month views by clicking a date on either; the
+footer goes to the about page. Links are undressed by default to keep the
+hand-drawn look, which reads as a static picture to somebody arriving for
+the first time — see `NAV_HINTS` for turning affordances on per domain.
 
 ## Run your own
 
@@ -164,8 +168,24 @@ gcloud projects add-iam-policy-binding $PROJECT \
   --role=roles/logging.viewer
 ```
 
-If you want a custom domain, see
-[GAE custom domains](https://cloud.google.com/appengine/docs/standard/mapping-custom-domains).
+### Custom domains
+
+Domains map to the App Engine *app*, not to a service, so several can point
+at one deployment without a second copy of anything. Create a mapping per
+domain, add the DNS records the command hands back at your registrar, then
+wait for the managed SSL certificate to provision — usually the slow part.
+
+```sh
+gcloud app domain-mappings create <your-domain> --project=<your-project-id>
+gcloud app domain-mappings list --project=<your-project-id>
+```
+
+`HOST_VERBS` decides what each domain renders and which one is primary;
+anything not in that list gets 301'd to the first entry. Deploying the new
+`env.yaml` before the DNS resolves is harmless — an unmapped domain simply
+isn't reachable yet. See
+[GAE custom domains](https://cloud.google.com/appengine/docs/standard/mapping-custom-domains)
+for the record details.
 
 ### Deploy
 
