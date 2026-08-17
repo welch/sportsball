@@ -31,10 +31,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   linkable from a résumé; a second App Engine service would have meant a
   duplicated config and a second set of instances drawing down the same
   per-app free instance-hour quota, for a one-word difference. Any host
-  outside the map is 301-redirected to the first entry, which keeps
-  consolidating appspot.com, bare IPs and stale aliases onto the real
-  domain. Unmapped hosts render the first entry's verb, so local dev still
-  looks like the live site.
+  outside the map is 301-redirected, and a `www.` prefix goes to the domain
+  beneath it when that domain is in the map: `www.ismydayhosed.fun` reaches
+  `ismydayhosed.fun`, rather than folding onto the first entry and bouncing
+  someone who deliberately typed the polite name over to the impolite one.
+  Everything else — appspot.com, bare IPs, stale aliases, and `www.` of a
+  domain the map doesn't carry — still consolidates onto the first entry.
+  Unmapped hosts render the first entry's verb, so local dev still looks
+  like the live site.
 
 ### Changed
 

@@ -750,6 +750,51 @@ def test_unmapped_host_redirects_to_the_primary(monkeypatch: pytest.MonkeyPatch)
     assert response.headers["Location"].rstrip("?") == "https://example.com/"
 
 
+def test_www_of_a_mapped_host_redirects_to_that_host(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`www.` belongs to its own domain, not to the primary one. Folding it
+    onto the first entry would bounce a visitor who deliberately typed the
+    polite name across to the profane one."""
+    monkeypatch.setenv("HOST_VERBS", "example.com=punished, polite.example=bothered")
+    response = main.app.test_client().get("/", headers={"Host": "www.polite.example"})
+    assert response.status_code == 301
+    assert response.headers["Location"].rstrip("?") == "https://polite.example/"
+
+
+def test_www_of_a_mapped_host_preserves_the_path_and_query(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("HOST_VERBS", "example.com=punished, polite.example=bothered")
+    response = main.app.test_client().get(
+        "/2026-08-21?nav=chevron", headers={"Host": "www.polite.example"}
+    )
+    assert response.status_code == 301
+    assert response.headers["Location"] == "https://polite.example/2026-08-21?nav=chevron"
+
+
+def test_www_of_the_primary_host_still_reaches_the_primary(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The primary is the first entry, so this held before www was understood
+    too — pinned so stripping `www.` can't regress it."""
+    monkeypatch.setenv("HOST_VERBS", "example.com=punished, polite.example=bothered")
+    response = main.app.test_client().get("/", headers={"Host": "www.example.com"})
+    assert response.status_code == 301
+    assert response.headers["Location"].rstrip("?") == "https://example.com/"
+
+
+def test_www_of_an_unmapped_host_still_folds_onto_the_primary(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Stripping `www.` only helps when what's left is a domain we serve.
+    A stale alias stays consolidated on the primary."""
+    monkeypatch.setenv("HOST_VERBS", "example.com=punished, polite.example=bothered")
+    response = main.app.test_client().get("/", headers={"Host": "www.stale.example"})
+    assert response.status_code == 301
+    assert response.headers["Location"].rstrip("?") == "https://example.com/"
+
+
 def test_unmapped_host_redirect_preserves_query_string(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

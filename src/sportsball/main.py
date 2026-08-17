@@ -214,15 +214,21 @@ def _default_verb() -> str:
 
 @app.before_request
 def _redirect_to_known_host() -> Response | None:
-    """301-redirect hosts outside `$HOST_VERBS` to the primary one.
+    """301-redirect hosts outside `$HOST_VERBS` to the domain they belong to.
 
-    The map's own domains each serve themselves; everything else (appspot,
-    a bare IP, a stale alias) is consolidated onto the first entry. No-ops
-    when `HOST_VERBS` is unset (local dev). Also skips localhost addresses,
-    so a developer whose local `env.yaml` carries the production map can
-    still hit `http://localhost:5000` without bouncing to production. Skips
-    `/healthz` and GAE cron requests so they keep working on the appspot
-    host.
+    The map's own domains each serve themselves. A `www.` prefix belongs to
+    the domain under it, so `www.ismydayhosed.fun` lands on
+    `ismydayhosed.fun` rather than being folded onto the primary — sending
+    someone who deliberately typed the polite name across to the profane one
+    would be a rude surprise. Everything else (appspot, a bare IP, a stale
+    alias, and `www.` of a domain we don't serve) still consolidates onto the
+    first entry.
+
+    No-ops when `HOST_VERBS` is unset (local dev). Also skips localhost
+    addresses, so a developer whose local `env.yaml` carries the production
+    map can still hit `http://localhost:5000` without bouncing to
+    production. Skips `/healthz` and GAE cron requests so they keep working
+    on the appspot host.
     """
     hosts = _host_verbs()
     if not hosts:
@@ -234,7 +240,9 @@ def _redirect_to_known_host() -> Response | None:
         return None
     if request.headers.get("X-Appengine-Cron") == "true":
         return None
-    return redirect(f"https://{next(iter(hosts))}{request.full_path}", code=301)
+    bare = host.removeprefix("www.")
+    target = bare if bare in hosts else next(iter(hosts))
+    return redirect(f"https://{target}{request.full_path}", code=301)
 
 
 def _compute_static_hash() -> str:
