@@ -30,14 +30,10 @@ URL patterns:
 | `/about` | What the site tracks, and how current the data is |
 | `/health/<token>` | Operator status page (token-gated, 404s on mismatch) |
 
-The verb in the title comes from the domain the request arrived on, so one
-deployment can serve both a blunt domain and a polite one for locales with
-sensitive ears. See `HOST_VERBS` below.
-
-Navigate between day and month views by clicking a date on either; the
-footer goes to the about page. Links are undressed by default to keep the
-hand-drawn look, which reads as a static picture to somebody arriving for
-the first time — see `NAV_HINTS` for turning affordances on per domain.
+The verb in the title can be configured differently for different
+domains serving the site, so the same app-engine deployment can serve
+both a blunt version and a polite one for locales with sensitive
+ears. See `HOST_VERBS` below.
 
 ## Run your own
 
@@ -93,8 +89,7 @@ Variables:
   HOST_VERBS: ismydayfucked.com=fucked, ismydayhosed.fun=hosed
   ```
 
-  One deployment serves them all; the pages differ only in the word, and
-  each domain canonicalizes to itself so neither outranks the other. Any
+  One deployment serves them all; the pages differ only in the word. Any
   host *not* in the list is 301-redirected to the first entry, which
   consolidates `<project>.appspot.com`, bare IPs, and stale aliases onto
   the real domain. `/healthz`, `localhost`/`127.0.0.1`/`0.0.0.0` requests,
@@ -106,8 +101,7 @@ Variables:
   variable unset there's no redirect at all and the verb is `hosed`.
 - `NAV_HINTS` — optional. Per-domain navigation affordances, same
   `host=value` grammar as `HOST_VERBS`, where the value is a style the
-  stylesheet knows. One ships: `chevron`, a dotted rule that goes solid on
-  hover, trailing the `›` the calendar's pager already uses.
+  stylesheet knows.
 
   ```yaml
   NAV_HINTS: ismydayhosed.fun=chevron
