@@ -1,3 +1,4 @@
+import re
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
@@ -1583,6 +1584,45 @@ def test_unmapped_host_canonicalizes_to_the_primary(
     monkeypatch.setattr(main, "_events", lambda: [])
     body = main.app.test_client().get("/2026-05-15", headers={"Host": "localhost"}).data.decode()
     assert '<link rel="canonical" href="https://example.com/2026-05-15">' in body
+
+
+def test_meta_tags_carry_the_requested_hosts_verb(
+    monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
+) -> None:
+    """`<title>` was per-host but `description` and `og:title` were not, so a
+    link to the polite domain previewed with the blunt verb — in a chat unfurl,
+    in a search snippet, on the résumé the domain exists for."""
+    monkeypatch.setenv("HOST_VERBS", "example.com=punished, polite.example=bothered")
+    monkeypatch.setattr(main, "_events", lambda: [])
+    body = (
+        main.app.test_client().get("/2026-05-15", headers={"Host": "polite.example"}).data.decode()
+    )
+    assert 'content="Is my day bothered? Are there events' in body
+    assert 'content="Is my day bothered? Events at' in body
+
+
+def test_every_verb_on_a_page_is_the_requested_hosts(
+    monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
+) -> None:
+    """Each domain's pages read as that domain's site throughout, head and
+    body alike.
+
+    Asserting the *other* host's verb is absent isn't enough: a verb written
+    into the template as a literal belongs to no host, so it slips past a
+    check phrased that way (which is how the blunt word survived in
+    `description` and `og:title` while `<title>` was already per-host).
+    Instead, collect every word the page completes the phrase with, and
+    require them all to be this host's.
+    """
+    monkeypatch.setenv("HOST_VERBS", "example.com=punished, polite.example=bothered")
+    monkeypatch.setattr(main, "_events", lambda: [])
+    client = main.app.test_client()
+    for host, verb in (("example.com", "punished"), ("polite.example", "bothered")):
+        for path in ("/", "/2026-05-15", "/calendar/2026-05"):
+            body = client.get(path, headers={"Host": host}).data.decode()
+            found = set(re.findall(r"Is my (?:day|month) ([A-Za-z]+)", body))
+            assert found, f"{host}{path} renders the phrase nowhere at all"
+            assert found == {verb}, f"{host}{path} renders verbs {sorted(found)}, wanted {verb}"
 
 
 # --- Navigation affordances -----------------------------------------------

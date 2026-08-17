@@ -3,10 +3,13 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    {# The verb is per-host, so it belongs in these two the same way it does
+       in the title: a link to the polite domain is previewed and indexed by
+       exactly these strings, and the domain exists to be shareable. #}
     <meta name="description"
-          content="Is my day fucked? Are there events at Oracle Park or Chase Center today?">
+          content="Is my day {{ verb }}? Are there events at Oracle Park or Chase Center today?">
     <meta property="og:title"
-          content="Is my day fucked? Events at Oracle Park or Chase Center today?">
+          content="Is my day {{ verb }}? Events at Oracle Park or Chase Center today?">
     <title>Is my day {{ verb }}?</title>
     <link rel="canonical" href="{{ canonical_url }}">
     <link rel="preconnect" href="https://fonts.googleapis.com">

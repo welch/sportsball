@@ -59,6 +59,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   pointed at the impolite one — the one thing the polite domain exists to
   prevent. The pages aren't true duplicates anyway; the verb differs
   throughout.
+- The day page's `description` and `og:title` now carry the requesting
+  domain's verb, as its `<title>` already did. Both were written as
+  literals, from back when there was only one domain to write, so the
+  polite domain served a polite title alongside a blunt search snippet and
+  a blunt chat unfurl — which is the part most people see before they ever
+  load the page, and so the part that decides whether the domain is
+  safe to put on a résumé at all. The calendar page already did this right.
 
 ### Removed
 
