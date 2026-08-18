@@ -66,7 +66,6 @@ env_variables:
   TICKETMASTER_API_KEY: <your-key>
   HEALTH_TOKEN: <32-char-hex>
   HOST_VERBS: <host=verb, …>     # optional
-  NAV_HINTS: <host=style, …>     # optional
   EVENTS_BUCKET: <bucket-name>   # optional
   REPO_URL: <your-repo-url>      # optional
 ```
@@ -99,24 +98,6 @@ Variables:
   site; to preview another domain's wording without touching DNS, send its
   Host header: `curl -H 'Host: ismydayhosed.fun' localhost:5000`. With the
   variable unset there's no redirect at all and the verb is `hosed`.
-- `NAV_HINTS` — optional. Per-domain navigation affordances, same
-  `host=value` grammar as `HOST_VERBS`, where the value is a style the
-  stylesheet knows.
-
-  ```yaml
-  NAV_HINTS: ismydayhosed.fun=chevron
-  ```
-
-  The site's links are undressed by default, which suits a page someone
-  visits daily and works against one they've never seen — a first-time
-  visitor can't tell it's anything but a picture. Turning hints on for a
-  single domain dresses the links that carry a `nav-link` class (the date
-  → month, the footer → about) without disturbing the everyday domain.
-  Append `?nav=chevron` or `?nav=off` to any page to try a style without a
-  restart; the canonical tag ignores the query, so those variants stay out
-  of search. Adding a style means a `.nav-<name>` block in `8ball.css` and
-  a word in `NAV_HINT_STYLES`. Unlisted hosts, unknown styles, and an unset
-  variable all render the plain look.
 - `EVENTS_BUCKET` — optional. Cloud Storage bucket where the cron writes
   the canonical events snapshot. The GAE default bucket
   (`<project-id>.appspot.com`) is convenient: it exists by default and the

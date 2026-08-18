@@ -26,8 +26,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   thins to weight 300 and darkens to `#555` so it sits beside Amatic's stroke
   instead of shouting next to it.
 
+### Removed
+
+- `NAV_HINTS`, and with it `NAV_HINT_STYLES`, the `?nav=` override and the
+  trailing-glyph machinery. It shipped in 0.8.0 on the theory that the
+  everyday domain wanted its links undressed and only a domain handed to a
+  stranger needed telling. Both domains wanted telling, which makes a
+  per-domain setting a knob nothing turns — the kind of configuration that
+  later reads as significant when it is only vestigial. The dotted rule is
+  unconditional now, and the glyph that trailed it is gone: once the rule was
+  carrying the affordance the glyph was noise, and it was the one mark on the
+  page no hand-drawn face could actually draw.
+
 ### Fixed
 
+- `prefers-reduced-motion: reduce` disabled a link glyph's 130ms transition
+  and left the answer window's infinite pulse running, which had it exactly
+  backwards. It now stops the glow, the only motion left on the page.
 - Every phone got a few pixels of sideways scroll. Under the 480px breakpoint
   the body is `width: 95%` with `1rem` of padding, and with no `box-sizing`
   rule anywhere that padding landed outside the percentage — a 390px viewport

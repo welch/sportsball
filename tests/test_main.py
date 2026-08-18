@@ -768,10 +768,10 @@ def test_www_of_a_mapped_host_preserves_the_path_and_query(
 ) -> None:
     monkeypatch.setenv("HOST_VERBS", "example.com=punished, polite.example=bothered")
     response = main.app.test_client().get(
-        "/2026-08-21?nav=chevron", headers={"Host": "www.polite.example"}
+        "/2026-08-21?ref=email", headers={"Host": "www.polite.example"}
     )
     assert response.status_code == 301
-    assert response.headers["Location"] == "https://polite.example/2026-08-21?nav=chevron"
+    assert response.headers["Location"] == "https://polite.example/2026-08-21?ref=email"
 
 
 def test_www_of_the_primary_host_still_reaches_the_primary(
@@ -1628,70 +1628,39 @@ def test_every_verb_on_a_page_is_the_requested_hosts(
 # --- Navigation affordances -----------------------------------------------
 #
 # Which links are navigation is a template decision (`.nav-link`); how they
-# look is the stylesheet's. These pin the machinery in between — the body
-# class — and deliberately assert nothing about the visual, so the styles
-# can be reworked in CSS alone.
+# look is the stylesheet's. These pin the markup contract and deliberately
+# assert nothing about the visual, so the styling can be reworked in CSS
+# alone. The affordance used to be per-domain (`NAV_HINTS`) and switchable
+# with `?nav=`; both domains wanted it, so it is unconditional and the body
+# carries no state class at all.
 
 
-def test_nav_hints_off_by_default(monkeypatch: pytest.MonkeyPatch, fixed_now: datetime) -> None:
+def test_body_carries_no_state_class(monkeypatch: pytest.MonkeyPatch, fixed_now: datetime) -> None:
     monkeypatch.setattr(main, "_events", lambda: [])
-    body = main.app.test_client().get("/").data.decode()
-    assert "<body>" in body
-    assert "nav-hints" not in body
-
-
-def test_nav_hints_are_per_host(monkeypatch: pytest.MonkeyPatch, fixed_now: datetime) -> None:
-    """The point of the setting: the domain a stranger is handed can dress
-    its links while the everyday domain stays undressed."""
-    monkeypatch.setattr(main, "_events", lambda: [])
-    monkeypatch.setenv("HOST_VERBS", "example.com=punished, polite.example=bothered")
-    monkeypatch.setenv("NAV_HINTS", "polite.example=chevron")
     client = main.app.test_client()
-    plain = client.get("/", headers={"Host": "example.com"}).data.decode()
-    hinted = client.get("/", headers={"Host": "polite.example"}).data.decode()
-    assert "nav-hints" not in plain
-    assert '<body class="nav-hints nav-chevron">' in hinted
+    for path in ("/", "/calendar/2026-05"):
+        body = client.get(path).data.decode()
+        assert "<body>" in body, path
+        assert "nav-hints" not in body and "nav-chevron" not in body, path
 
 
-def test_nav_hints_reach_the_calendar_too(
-    monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
-) -> None:
+def test_nav_query_string_is_inert(monkeypatch: pytest.MonkeyPatch, fixed_now: datetime) -> None:
+    """`?nav=` used to switch the affordance on. It is gone, so the parameter
+    must change nothing rather than linger as an undocumented lever."""
     monkeypatch.setattr(main, "_events", lambda: [])
-    monkeypatch.setenv("NAV_HINTS", "polite.example=chevron")
-    body = (
-        main.app.test_client()
-        .get("/calendar/2026-05", headers={"Host": "polite.example"})
-        .data.decode()
-    )
-    assert '<body class="nav-hints nav-chevron">' in body
-
-
-def test_nav_query_overrides_the_host_setting(
-    monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
-) -> None:
-    """`?nav=` is how you compare styles on one page without a restart."""
-    monkeypatch.setattr(main, "_events", lambda: [])
-    monkeypatch.delenv("NAV_HINTS", raising=False)
     client = main.app.test_client()
-    hosted = {"Host": "polite.example"}
-    assert (
-        '<body class="nav-hints nav-chevron">'
-        in client.get("/?nav=chevron", headers=hosted).data.decode()
-    )
-    # Anything the CSS can't draw — `off`, a retired style, a typo, an
-    # injection attempt — falls back to plain rather than reaching the markup.
-    monkeypatch.setenv("NAV_HINTS", "polite.example=chevron")
-    for query in ("?nav=off", "?nav=arrow", "?nav=<script>"):
-        assert "nav-hints" not in client.get(f"/{query}", headers=hosted).data.decode()
+    plain = client.get("/2026-05-15").data.decode()
+    for query in ("?nav=chevron", "?nav=off", "?nav=<script>"):
+        assert client.get(f"/2026-05-15{query}").data.decode() == plain, query
 
 
-def test_nav_hints_do_not_reach_the_canonical(
+def test_canonical_ignores_the_query_string(
     monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
 ) -> None:
-    """A hinted URL must still name the plain one, or `?nav=` variants land
-    in the index as duplicates."""
+    """The canonical is built from the path alone, so query variants of a page
+    never land in the index as duplicates of it."""
     monkeypatch.setattr(main, "_events", lambda: [])
-    body = main.app.test_client().get("/2026-05-15?nav=chevron").data.decode()
+    body = main.app.test_client().get("/2026-05-15?anything=here").data.decode()
     assert '<link rel="canonical" href="http://localhost/2026-05-15">' in body
 
 
