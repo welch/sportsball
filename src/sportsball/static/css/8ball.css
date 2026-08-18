@@ -22,7 +22,15 @@
     font-family: 'Amatic SC';
     font-style: normal;
     font-weight: 400;
-    font-display: swap;
+    /* `block`, not `swap`: hold the text briefly rather than show it in
+     * another face and change it under the reader. The face is the site's
+     * voice, and a first-time visitor arriving from a résumé link should meet
+     * it rather than watch it arrive. The block period is roughly 3s in
+     * practice, but the file is 19.8 KB from this origin and preloaded, so it
+     * is tens of milliseconds — and the fallback below still catches the
+     * expiry, a glyph this subset lacks, or a font that never loads.
+     */
+    font-display: block;
     src: url(../fonts/amatic-sc-v28-latin-400.woff2) format('woff2');
 }
 

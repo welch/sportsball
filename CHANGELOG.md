@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The webfont blocks rather than swaps. On a genuinely cold visit — nothing
+  cached, and the cache is per-origin so each domain pays it once — the
+  headline could still be seen arriving, because `swap` paints the fallback
+  and replaces it. `block` holds the text instead, briefly and invisibly, so
+  the face is the first thing a reader sees rather than the second. The wait
+  is bounded at roughly 3s by the browser and is tens of milliseconds here:
+  19.8 KB, same origin, preloaded. The metric-matched fallback still stands
+  behind it for that expiry, for a glyph the latin subset lacks, and for a
+  font that never arrives at all.
+
 ## [0.9.0] - 2026-08-18
 
 ### Changed
