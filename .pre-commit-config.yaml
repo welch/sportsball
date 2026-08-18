@@ -2,8 +2,13 @@ repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
     hooks:
+      # Vendored third-party files stay byte-identical to upstream: a
+      # licence that has been reformatted is no longer quite the licence
+      # that was granted, however cosmetic the edit.
       - id: trailing-whitespace
+        exclude: ^src/sportsball/static/fonts/
       - id: end-of-file-fixer
+        exclude: ^src/sportsball/static/fonts/
       - id: check-yaml
       - id: check-toml
       - id: check-added-large-files

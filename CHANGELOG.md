@@ -44,6 +44,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The headline flashed in the fallback face before settling, roughly one
+  navigation in three. `font-display: swap` paints fallback text until the
+  webfont arrives, and the font itself lives on `fonts.gstatic.com` — a second
+  origin whose DNS lookup and TLS handshake could not begin until the font CSS
+  had come back from `fonts.googleapis.com`. Whether that connection was still
+  warm is what made it intermittent. Arial sets this headline 1.86x as wide as
+  Amatic, wide enough to wrap to two lines on a phone and rewrap on arrival,
+  so the swap read as a flash of something much larger.
+
+  The font is now served from this origin (latin subset, 19.8 KB, OFL 1.1 with
+  the licence alongside it), which removes both third-party origins from every
+  page load. A companion `@font-face` gives the fallback Amatic's proportions
+  via `size-adjust` and matching vertical overrides, so a swap that does happen
+  changes the shapes without moving anything: the headline measures within
+  0.5% of Amatic's width in the fallback, against 86% wider before.
+
 - The dotted rule under a nav link vanished on mouseover instead of firming up
   to solid. Making the affordance unconditional dropped it from
   `body.nav-hints a.nav-link` to a bare `a.nav-link`, which is less specific

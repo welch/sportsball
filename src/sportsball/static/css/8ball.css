@@ -3,6 +3,44 @@
  * percentage, so the document comes out wider than the viewport and every
  * phone gets a few pixels of sideways scroll.
  */
+/* Amatic SC, served from this origin -----------------------------------------
+ *
+ * Google's copy needs a second DNS lookup and TLS handshake to
+ * fonts.gstatic.com that cannot begin until the font CSS has arrived, and
+ * `swap` paints fallback text meanwhile. That showed as the headline flashing
+ * in Arial at 1.86x the width — wide enough to wrap to two lines on a phone
+ * and then rewrap when the real font landed. Same-origin it is already
+ * connected, and `vstatic` caches it.
+ *
+ * Latin subset only (19.8 KB). The event feeds are pure ASCII today; an
+ * accented name would fall back for that glyph alone, which is why no
+ * `unicode-range` is declared here.
+ *
+ * Amatic SC is OFL 1.1 — see `fonts/OFL.txt`.
+ */
+@font-face {
+    font-family: 'Amatic SC';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url(../fonts/amatic-sc-v28-latin-400.woff2) format('woff2');
+}
+
+/* A fallback cut to Amatic's proportions, so that if the swap is ever visible
+ * the text keeps its size and line breaks and only the shapes change. Amatic's
+ * mean advance is 31.1% of the em against Arial's ~56%, which is the
+ * size-adjust; the vertical overrides are Amatic's own metrics (ascent 101.6%,
+ * descent 24.5%, no line gap) divided by that same factor.
+ */
+@font-face {
+    font-family: 'Amatic SC fallback';
+    src: local('Arial'), local('Helvetica Neue'), local('Liberation Sans');
+    size-adjust: 54%;
+    ascent-override: 188%;
+    descent-override: 45.4%;
+    line-gap-override: 0%;
+}
+
 *,
 *::before,
 *::after {
@@ -15,7 +53,7 @@
 }
 
 body {
-    font-family: 'Amatic SC', arial, sans-serif;
+    font-family: 'Amatic SC', 'Amatic SC fallback', arial, sans-serif;
     font-size: 27px;
     text-align: center;
     width: 80%;
