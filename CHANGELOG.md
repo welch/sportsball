@@ -21,6 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   compare them against; Amatic's extra height made the flatness obvious. Net
   of both changes the answer lands *higher* on a phone than before — the
   verdict's bottom edge measures 558px at 390px wide, against 571px prior.
+- The about page no longer offers the typography as something a fork could
+  improve on. It was accurate about Permanent Marker and is not about what
+  replaced it, and a site that apologises for its own design invites the
+  reader to agree. The sentence also gains the full stop it never had.
 - The footer link keeps the system face on purpose: it is the one link into
   `/about`, which is set in that same stack, so it previews where it goes. It
   thins to weight 300 and darkens to `#555` so it sits beside Amatic's stroke
