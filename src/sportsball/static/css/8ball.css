@@ -476,10 +476,18 @@ footer a:active {
  * setting is gone.
  */
 
-a.nav-link,
+/* Matched on a pseudo-class, and restating `text-decoration-line` in both
+ * rules, on purpose. A nav link also carries `.plain` (the date) or sits in
+ * the footer, and both of those strip link chrome with the `text-decoration`
+ * shorthand — `a.plain:hover` included. A bare `a.nav-link` loses the *line*
+ * to that hover rule while still winning the style and colour, so the rule
+ * vanished on mouseover instead of firming up. Keep these at least as
+ * specific as the resets they have to override.
+ */
+a.nav-link:link,
 a.nav-link:visited {
     cursor: pointer;
-    text-decoration: underline;
+    text-decoration-line: underline;
     text-decoration-style: dotted;
     text-decoration-thickness: 2px;
     text-decoration-color: rgba(0, 0, 0, 0.3);
@@ -487,8 +495,11 @@ a.nav-link:visited {
 }
 
 a.nav-link:hover {
+    text-decoration-line: underline;
     text-decoration-style: solid;
+    text-decoration-thickness: 2px;
     text-decoration-color: currentColor;
+    text-underline-offset: 0.18em;
 }
 
 @media (prefers-reduced-motion: reduce) {

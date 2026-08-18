@@ -1,5 +1,6 @@
 import re
 from datetime import date, datetime
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -1662,6 +1663,25 @@ def test_canonical_ignores_the_query_string(
     monkeypatch.setattr(main, "_events", lambda: [])
     body = main.app.test_client().get("/2026-05-15?anything=here").data.decode()
     assert '<link rel="canonical" href="http://localhost/2026-05-15">' in body
+
+
+def test_nav_link_hover_restates_the_underline() -> None:
+    """The hover rule must set `text-decoration-line` itself, not inherit it.
+
+    A nav link also carries `.plain` (the date) or sits in the footer, and both
+    of those strip link chrome with the `text-decoration` shorthand —
+    `a.plain:hover` among them. A hover rule that sets only style and colour
+    wins those but loses the *line*, so the rule disappears on mouseover
+    instead of firming up, which is exactly what happened when the affordance
+    stopped being scoped by a body class and got less specific.
+
+    A content check rather than a rendering one: the suite has no layout
+    engine, and the declaration reads as redundant until you know why it isn't.
+    """
+    css = (Path(main.app.static_folder) / "css" / "8ball.css").read_text()
+    hover = css.split("a.nav-link:hover {", 1)[1].split("}", 1)[0]
+    assert "text-decoration-line: underline" in hover
+    assert "text-decoration-style: solid" in hover
 
 
 def test_nav_links_are_marked_up_for_styling(

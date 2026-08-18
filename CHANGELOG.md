@@ -44,6 +44,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The dotted rule under a nav link vanished on mouseover instead of firming up
+  to solid. Making the affordance unconditional dropped it from
+  `body.nav-hints a.nav-link` to a bare `a.nav-link`, which is less specific
+  than the `a.plain:hover` reset the date link also matches — so the hover
+  rule kept winning the style and colour while losing the underline itself.
+  Both rules now state `text-decoration-line` outright.
 - `prefers-reduced-motion: reduce` disabled a link glyph's 130ms transition
   and left the answer window's infinite pulse running, which had it exactly
   backwards. It now stops the glow, the only motion left on the page.
