@@ -1,3 +1,14 @@
+/* Padding and borders count inside a declared width. Without this the body's
+ * `width: 95%` under the narrow breakpoint adds its `1rem` padding outside the
+ * percentage, so the document comes out wider than the viewport and every
+ * phone gets a few pixels of sideways scroll.
+ */
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
 :root {
     --giants-orange: #FD5A1E;
     --warriors-blue: #1D428A;

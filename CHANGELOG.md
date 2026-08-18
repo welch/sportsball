@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Every phone got a few pixels of sideways scroll. Under the 480px breakpoint
+  the body is `width: 95%` with `1rem` of padding, and with no `box-sizing`
+  rule anywhere that padding landed outside the percentage — a 390px viewport
+  rendered a 403px document. Set `border-box` globally; the document now
+  matches the viewport exactly.
+
 ## [0.8.0] - 2026-08-18
 
 ### Added
