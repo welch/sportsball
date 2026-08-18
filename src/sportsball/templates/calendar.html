@@ -12,6 +12,8 @@
        here so anything that fetches it anyway still folds the verb
        variants onto one URL. #}
     <link rel="canonical" href="{{ canonical_url }}">
+    <link rel="preload" as="font" type="font/woff2" crossorigin
+          href="{{ url_for('static', filename='fonts/amatic-sc-v28-latin-400.woff2') }}">
     <link rel="stylesheet" type="text/css"
           href="{{ vstatic('css/8ball.css') }}">
     <link rel="icon" type="image/png"

@@ -6,8 +6,13 @@ includes:
   - env.yaml
 
 handlers:
+  # The stylesheet is requested with a content-hash query (`vstatic`) and the
+  # font filename carries its own version, so both are safe to cache hard. The
+  # default expiration is minutes, which had browsers revalidating the font on
+  # every navigation and reopening the font-swap window each time.
   - url: /static
     static_dir: src/sportsball/static
+    expiration: "365d"
     secure: always
 
   - url: /favicon\.ico

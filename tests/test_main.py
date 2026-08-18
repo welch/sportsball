@@ -1665,6 +1665,27 @@ def test_canonical_ignores_the_query_string(
     assert '<link rel="canonical" href="http://localhost/2026-05-15">' in body
 
 
+def test_font_preload_matches_the_url_the_stylesheet_asks_for() -> None:
+    """The preload href must be exactly the URL the `@font-face` resolves to.
+
+    A mismatch fails silently and expensively: the preload warms one URL, the
+    stylesheet requests another, and the font is fetched twice while the swap
+    window stays open. The stylesheet's `url()` is relative to the CSS file and
+    carries no cache-busting query, so the preload must not add one either —
+    which rules out `vstatic` for this particular link.
+    """
+    css = (Path(main.app.static_folder) / "css" / "8ball.css").read_text()
+    ref = re.search(r"src:\s*url\((\.\./)?([^)\s]+)\)", css).group(2)
+    resolved = f"/static/{ref}"
+
+    with main.app.test_client() as client:
+        for path in ("/", "/calendar/2026-05"):
+            body = client.get(path).data.decode()
+            hrefs = re.findall(r'rel="preload"[^>]*href="([^"]+)"', body, re.S)
+            assert hrefs, f"{path} preloads no font"
+            assert resolved in hrefs, f"{path} preloads {hrefs}, stylesheet wants {resolved}"
+
+
 def test_nav_link_hover_restates_the_underline() -> None:
     """The hover rule must set `text-decoration-line` itself, not inherit it.
 

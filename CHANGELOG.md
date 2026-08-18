@@ -44,6 +44,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The headline still flickered after the font was self-hosted, more often on
+  the calendar and now rendering *smaller* rather than larger. Two causes. The
+  fallback's `size-adjust` had been derived from a sample typed in capitals,
+  and Amatic is a caps face while Arial's capitals are much wider than its
+  lowercase — so 54% fitted the test string and set the real lowercase
+  headline 13% narrow. Measured against the strings the site actually renders
+  the range is 58-72%, and 60% holds both headlines inside 4%. Second, the
+  font could not begin downloading until the stylesheet had been fetched and
+  parsed, and static files were served with `no-cache`, so every navigation
+  revalidated and reopened the window. The font is now preloaded — it starts
+  with the HTML, alongside the stylesheet rather than behind it — and
+  `/static` is cached for a year, which is safe because the stylesheet carries
+  a content hash and the font's filename carries its version.
 - The headline flashed in the fallback face before settling, roughly one
   navigation in three. `font-display: swap` paints fallback text until the
   webfont arrives, and the font itself lives on `fonts.gstatic.com` — a second
