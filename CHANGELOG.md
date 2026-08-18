@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The site is set in Amatic SC rather than Permanent Marker, on every domain.
+  The polite domain was meant to be handed to a stranger, and the marker hand
+  is an in-joke a first-time reader has no way into; Amatic is odd enough to
+  still be a voice and quiet enough not to be a punchline. Sizes come up about
+  a third to match — it is a condensed caps face and sets much smaller at the
+  same px — which as a bonus keeps the question on one line where the old face
+  wrapped it.
+- The date and the verdict now sit a notch under the question rather than
+  matching it. They had shared the h1's size since there was nothing else to
+  compare them against; Amatic's extra height made the flatness obvious. Net
+  of both changes the answer lands *higher* on a phone than before — the
+  verdict's bottom edge measures 558px at 390px wide, against 571px prior.
+- The footer link keeps the system face on purpose: it is the one link into
+  `/about`, which is set in that same stack, so it previews where it goes. It
+  thins to weight 300 and darkens to `#555` so it sits beside Amatic's stroke
+  instead of shouting next to it.
+
 ### Fixed
 
 - Every phone got a few pixels of sideways scroll. Under the 480px breakpoint
