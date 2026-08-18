@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-08-18
+
 ### Added
 
 - `NAV_HINTS`, per-domain navigation affordances. The site's links are
@@ -81,6 +83,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `VERB` and `CANONICAL_HOST`, both subsumed by `HOST_VERBS`. A deployment
   carrying the old pair loses its redirect and falls back to the default
   verb (`hosed`) until the new variable is set.
+
+### Fixed
+
+- `__version__` had been left at 0.6.0 since the 0.7.0 cut. The
+  Ticketmaster adapter puts it in the outbound `User-Agent`, so the app
+  introduced itself as `sportsball/0.6.0` to the one API that reads it.
+  It now tracks the release, and cutting a version updates it.
 
 ## [0.7.0] - 2026-08-09
 
