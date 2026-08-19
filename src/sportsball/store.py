@@ -10,7 +10,7 @@ is a logged warning, and callers fall back to fetching adapters directly.
 import json
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 from sportsball.models import Event
@@ -125,3 +125,46 @@ def previously_unseen(new_events: list[Event], prev_events: list[Event]) -> list
     """Subset of ``new_events`` whose ``(source, source_id)`` wasn't in ``prev_events``."""
     prev_keys = {(e.source, e.source_id) for e in prev_events}
     return [e for e in new_events if (e.source, e.source_id) not in prev_keys]
+
+
+# How far back a retained event is worth keeping. Mirrors the browsable date
+# space (`BROWSE_YEARS` in `main`, one year either side of today), rounded out
+# to a leap year's worth of days: keeping what nobody can navigate to would
+# only grow the blob. Stated here rather than imported because `main` imports
+# this module, not the other way round.
+RETAIN_PAST_DAYS = 366
+
+
+def retain_occurred(
+    new_events: list[Event],
+    prev_events: list[Event],
+    now: datetime,
+) -> list[Event]:
+    """``new_events``, plus anything from ``prev_events`` that already happened.
+
+    Cron replaces the snapshot with whatever the adapters just returned, which
+    means an event disappears the moment its source stops listing it. That is
+    right for a *future* event — a source dropping one is how a cancellation or
+    a reschedule reaches us — and wrong for a past one, where it says only that
+    the source has moved on. Ticketmaster's Discovery API drops events once they
+    are over (a past window returns nothing where an upcoming one returns
+    dozens), so every concert was being erased the day after it happened. MLB
+    publishes a full season, so Giants games survived and the hole was easy to
+    miss.
+
+    An event counts as having happened once its start time is behind ``now``,
+    not once its date is: cron runs at 06:00, and tonight's game has not
+    happened yet.
+
+    Retained events are matched on ``(source, source_id)``, and a still-reported
+    event always takes its fresh copy — retention adds history, it never
+    shadows an update. Anything older than `RETAIN_PAST_DAYS` is let go.
+    """
+    fresh_keys = {(e.source, e.source_id) for e in new_events}
+    floor = now - timedelta(days=RETAIN_PAST_DAYS)
+    retained = [
+        e
+        for e in prev_events
+        if (e.source, e.source_id) not in fresh_keys and floor <= e.starts_at < now
+    ]
+    return sorted(new_events + retained, key=lambda e: e.starts_at)

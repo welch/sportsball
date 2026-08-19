@@ -730,10 +730,16 @@ def refresh() -> tuple[str, int]:
     prior = store.read_events()
     if prior is not None:
         stats.load_adapter_stats(prior[3])
-    events = fetch_all(_adapters())
+    fetched = fetch_all(_adapters())
     fetched_at = datetime.now(tz=PT)
     prev_events = prior[0] if prior is not None else []
-    prev_unseen = store.previously_unseen(events, prev_events)
+    # What's new is judged against what the adapters just said, before history
+    # is folded back in — a retained past event is not news.
+    prev_unseen = store.previously_unseen(fetched, prev_events)
+    # Sources stop listing events once they are over; Ticketmaster's does so
+    # within a day. Carrying the occurred ones forward is what keeps the
+    # calendar's past from emptying out behind us.
+    events = store.retain_occurred(fetched, prev_events, fetched_at)
     # Snapshot per-adapter outcomes so a future serving instance (which will
     # only ever read the storage blob, never run adapters itself) can render
     # the cron's view of adapter health on /health/<token>.

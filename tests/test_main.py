@@ -1,5 +1,5 @@
 import re
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -402,11 +402,49 @@ def test_refresh_fetches_writes_storage_and_updates_cache(
     assert len(write_calls) == 1
     _events, _fetched_at, kwargs = write_calls[0]
     assert [e.source_id for e in kwargs["previously_unseen"]] == [e2.source_id]
-    assert main._cache["events"] is fetched_events
+    # Equality, not identity: what's cached and written is the fetch merged
+    # with any past events the sources have stopped reporting, so it is a new
+    # list even on a run that retains nothing.
+    assert main._cache["events"] == fetched_events
+    assert _events == fetched_events
     assert main._cache["fetched_at"] > 0.0
     assert [e.source_id for e in main._cache["previously_unseen"]] == [e2.source_id]
     main._cache["events"] = None
     main._cache["fetched_at"] = 0.0
+    main._cache["previously_unseen"] = []
+
+
+def test_refresh_carries_forward_events_the_sources_have_dropped(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """End to end: a concert Ticketmaster has stopped listing stays written.
+
+    The unit rule lives in `store.retain_occurred`; this pins that cron
+    actually applies it, and that a retained event is not reported as new.
+    """
+    # Relative to real time: cron stamps `fetched_at` with `datetime.now`, and
+    # retention is bounded to the browsable year, so a fixed past date would
+    # eventually age out of the window and take this test with it.
+    week_ago = (datetime.now(tz=PT) - timedelta(days=7)).isoformat()
+    played = _ev("A Concert", "Chase Center", week_ago, kind="event")
+    upcoming = _ev("Mets at SF Giants", "Oracle Park", "2099-05-15T19:00:00+00:00")
+
+    write_calls: list[tuple] = []
+    monkeypatch.setattr(main, "fetch_all", lambda adapters: [upcoming])
+    monkeypatch.setattr(
+        main.store, "write_events", lambda ev, at, **kw: write_calls.append((ev, kw))
+    )
+    monkeypatch.setattr(main.store, "read_events", lambda: ([played, upcoming], object(), [], []))
+    main._cache["events"] = None
+    main._cache["previously_unseen"] = []
+
+    response = main.app.test_client().get("/tasks/refresh", headers={"X-Appengine-Cron": "true"})
+    assert response.status_code == 200
+    written, kwargs = write_calls[0]
+    assert {e.source_id for e in written} == {"A Concert", "Mets at SF Giants"}
+    assert kwargs["previously_unseen"] == []
+    assert {e.source_id for e in main._cache["events"]} == {"A Concert", "Mets at SF Giants"}
+    main._cache["events"] = None
     main._cache["previously_unseen"] = []
 
 

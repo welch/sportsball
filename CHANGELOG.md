@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Events vanished from the past the day after they happened. Cron replaces the
+  snapshot with whatever the adapters just returned, so an event survived only
+  as long as its source kept listing it — and Ticketmaster's Discovery API
+  drops events once they are over: a past window returns nothing where an
+  upcoming one returns dozens. Every concert and comedy night was being erased
+  a day after the fact. It stayed invisible because MLB publishes a whole
+  season, so Giants games kept showing up on past days and the calendar never
+  looked empty.
+
+  A source dropping a *future* event still means something — a cancellation, a
+  reschedule — and still removes it. A source dropping a past one now means
+  nothing: the event is carried forward from the previous snapshot instead.
+  Retention is bounded to a year back, matching the browsable date space,
+  since keeping what nobody can navigate to would only grow the blob. Events
+  are matched on `(source, source_id)` and a still-reported event always takes
+  its fresh copy, so history is added without ever shadowing an update.
+
+  This stops the loss; it cannot undo it. Ticketmaster events from before
+  2026-08-19 are gone, beyond whatever is recoverable from the bucket's
+  soft-deleted snapshots.
+
 ### Changed
 
 - The webfont blocks rather than swaps. On a genuinely cold visit — nothing
