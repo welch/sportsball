@@ -68,6 +68,34 @@ if [ -z "$BUCKET" ]; then
 fi
 export EVENTS_BUCKET="$BUCKET"
 
+# Refuse to run if anything is already listening on the port.
+#
+# This script drives whatever answers on ${PORT}, and used to treat "something
+# answered /healthz" as "my server is up". A leftover instance on that port —
+# older code, pointed at the same production bucket — therefore got handed the
+# refresh, and wrote the live snapshot with whatever rules it was built with.
+# That happened: a stale server erased events the current code would have kept.
+# The server has to be one we started, so a port we cannot have is fatal.
+port_in_use() {
+    if command -v lsof > /dev/null 2>&1; then
+        lsof -nP -iTCP:"$1" -sTCP:LISTEN > /dev/null 2>&1
+    elif command -v nc > /dev/null 2>&1; then
+        nc -z 127.0.0.1 "$1" > /dev/null 2>&1
+    else
+        # Last resort: any HTTP answer at all means someone is home.
+        curl -s -o /dev/null --max-time 1 "http://127.0.0.1:$1/" 2>/dev/null
+    fi
+}
+
+if port_in_use "$PORT"; then
+    echo "Port ${PORT} is already in use." >&2
+    echo >&2
+    echo "This writes the production snapshot through a server it starts itself." >&2
+    echo "Driving one it didn't start could refresh the live bucket using older" >&2
+    echo "code. Stop whatever is on ${PORT}, or set PORT=<n> to use another." >&2
+    exit 1
+fi
+
 echo "Refreshing events into gs://${BUCKET} (via 127.0.0.1:${PORT})"
 
 uv run gunicorn -b "127.0.0.1:${PORT}" --pythonpath src sportsball.main:app \
@@ -78,11 +106,21 @@ trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT INT TERM
 # Poll the port rather than sleeping a guessed interval — a cold `uv run`
 # that has to resolve the environment takes noticeably longer than a warm one.
 attempt=0
-until curl -fsS -o /dev/null "http://127.0.0.1:${PORT}/healthz" 2>/dev/null; do
+# --max-time so a socket that accepts and then says nothing can't wedge the
+# loop: without it curl waits on the connection indefinitely, and neither the
+# attempt counter nor the liveness check below ever gets to run.
+until curl -fsS -o /dev/null --max-time 2 "http://127.0.0.1:${PORT}/healthz" 2>/dev/null; do
+    # If our own server has gone, something else is about to answer for it.
+    # The pre-flight check above closes the common case; this closes the race
+    # where a server appears on the port between that check and this loop.
+    if ! kill -0 "$SERVER_PID" 2>/dev/null; then
+        echo "The server exited before it answered on port ${PORT}." >&2
+        echo "Refusing to refresh through whatever else may be listening." >&2
+        exit 1
+    fi
     attempt=$((attempt + 1))
     if [ "$attempt" -gt 60 ]; then
-        echo "Server never answered on port ${PORT}. Is it already in use?" >&2
-        echo "Set PORT=<n> to use a different one." >&2
+        echo "Server never answered on port ${PORT}. Set PORT=<n> to use another." >&2
         exit 1
     fi
     sleep 0.5

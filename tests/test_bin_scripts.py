@@ -10,21 +10,24 @@ deploying the app or rewriting the live blob from a test run.
 """
 
 import shutil
+import socket
 import subprocess
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
-SANDBOX_PATH = "/usr/bin:/bin"
+# `/usr/sbin` is here for lsof, which is how bin/refresh detects an occupied
+# port. Still contains neither gcloud nor uv — see the sandbox test below.
+SANDBOX_PATH = "/usr/bin:/bin:/usr/sbin"
 
 
-def _run(script: str, *args: str) -> subprocess.CompletedProcess[str]:
+def _run(script: str, *args: str, **env: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [str(REPO / "bin" / script), *args],
         cwd=REPO,
-        env={"PATH": SANDBOX_PATH},
+        env={"PATH": SANDBOX_PATH, **env},
         capture_output=True,
         text=True,
-        timeout=30,
+        timeout=60,
     )
 
 
@@ -75,3 +78,24 @@ def test_refresh_refuses_arguments_it_does_not_understand() -> None:
     assert result.returncode == 2
     assert "takes no arguments" in result.stderr
     assert "--dry-run" in result.stderr
+
+
+def test_refresh_refuses_a_port_that_is_already_in_use() -> None:
+    """It drives whatever answers on the port, so the server has to be its own.
+
+    It used to read "something answered /healthz" as "my server is up", and a
+    leftover instance on that port — older code, same production bucket — was
+    handed the refresh instead. That is not hypothetical: it happened, and the
+    stale server wrote the live snapshot under the rules it was built with,
+    erasing events the current code would have carried forward.
+    """
+    with socket.socket() as held:
+        held.bind(("127.0.0.1", 0))
+        held.listen(1)
+        port = held.getsockname()[1]
+        result = _run("refresh", PORT=str(port))
+
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert f"Port {port} is already in use" in result.stderr
+    # It must refuse *before* announcing a write to the production bucket.
+    assert "Refreshing events into" not in result.stdout

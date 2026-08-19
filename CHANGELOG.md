@@ -14,6 +14,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   so the one flag you'd be reaching for help to be reminded of was the one
   flag the help you got couldn't mention. Both scripts now answer `--help`
   and `-h` themselves, and say where gcloud's own help lives.
+- `bin/refresh` drove whatever answered on its port. It read "something
+  answered `/healthz`" as "my server is up", so a leftover instance on 8099 —
+  older code, same production bucket — got handed the refresh and wrote the
+  live snapshot under the rules it was built with. That is how five recovered
+  events were erased minutes after being restored. It now refuses a port it
+  cannot have, aborts if the server it started dies before answering, and
+  bounds the health poll so a socket that accepts and then says nothing can no
+  longer wedge it indefinitely.
 - `bin/refresh` took no arguments and ignored whatever it was given, so
   `bin/refresh --help` — the obvious thing to type when you want to know what
   a script does — performed a production snapshot write instead of explaining
