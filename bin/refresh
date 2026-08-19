@@ -60,7 +60,14 @@ PORT="${PORT:-8099}"
 # The app reads env.yaml itself at import, but resolve the bucket here too:
 # an unset EVENTS_BUCKET turns the write into a logged no-op, and a refresh
 # that silently doesn't persist is worse than one that refuses to start.
-BUCKET="${EVENTS_BUCKET:-$(sed -n 's/^[[:space:]]*EVENTS_BUCKET:[[:space:]]*//p' env.yaml 2>/dev/null)}"
+# Read through a guard rather than inline: env.yaml is gitignored, so on a
+# fresh clone `sed` fails, and under `set -e` a failing command substitution in
+# an assignment takes the whole script with it — exit 2, no output, before the
+# explanation below ever prints.
+BUCKET="${EVENTS_BUCKET:-}"
+if [ -z "$BUCKET" ] && [ -f env.yaml ]; then
+    BUCKET=$(sed -n 's/^[[:space:]]*EVENTS_BUCKET:[[:space:]]*//p' env.yaml) || BUCKET=""
+fi
 if [ -z "$BUCKET" ]; then
     echo "EVENTS_BUCKET is unset and env.yaml doesn't supply one." >&2
     echo "Refusing to run: the snapshot write would be a silent no-op." >&2

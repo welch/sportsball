@@ -14,6 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   so the one flag you'd be reaching for help to be reminded of was the one
   flag the help you got couldn't mention. Both scripts now answer `--help`
   and `-h` themselves, and say where gcloud's own help lives.
+- `bin/refresh` exited 2 with no output on a machine without `env.yaml`,
+  which is any fresh clone since the file is gitignored. Under `set -e` a
+  failing command substitution inside an assignment takes the script with it,
+  so `sed` not finding the file killed it before the "EVENTS_BUCKET is unset"
+  explanation could print.
 - `bin/refresh` drove whatever answered on its port. It read "something
   answered `/healthz`" as "my server is up", so a leftover instance on 8099 —
   older code, same production bucket — got handed the refresh and wrote the
