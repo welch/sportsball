@@ -26,6 +26,10 @@
       .err-msg { font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
                  font-size: .85em; white-space: pre-wrap; word-break: break-word; }
       .page-views { font-size: 1.05em; margin: .75em 0 .25em; color: #2a7a2a; }
+      /* Requests that actually reached a page. Crawler 3xx/4xx outnumber them
+         by 10-50x, so without a marker the row worth reading is just one line
+         among many with a smaller number in it. */
+      tr.served td { background: #f2f9f2; color: #2a7a2a; font-weight: 600; }
     </style>
   </head>
   <body>
@@ -79,41 +83,73 @@
 
     <h2>HTTP requests (last {{ request_summary.window_hours }}h)</h2>
     {% if request_summary.source == "unavailable" %}
-      <p class="muted">Cloud Logging query failed — see server logs. The
-        traffic count won't render until the next successful query.</p>
+      <p class="muted">Both the Cloud Monitoring query and the Cloud Logging
+        fallback failed — see server logs. The traffic count won't render until
+        one of them succeeds.</p>
     {% else %}
       {# A truncated scan counted a prefix of the window, so every number
          here is a floor. Mark them all rather than quietly under-reporting. #}
       {% set plus = "+" if request_summary.truncated else "" %}
+      {% set total = request_summary.total %}
       <p class="page-views"><strong>{{ request_summary.user_traffic }}{{ plus }}</strong>
         page views (2xx) in the last {{ request_summary.window_hours }} hours.</p>
+      {# Crawler 3xx/4xx routinely run 10-50x the 2xx count, which buries the
+         one number worth reading. Give every row its share of the total so
+         the noise reads as noise, and split the table so real traffic isn't
+         listed alongside it. #}
       <table>
         <thead>
           <tr>
-            <th>Class</th>
+            <th>Status</th>
             <th class="num">Count</th>
+            <th class="num">Share</th>
           </tr>
         </thead>
         <tbody>
+          {% if request_summary.by_code %}
+            {% for code, count in request_summary.by_code.items() %}
+              <tr{% if code.startswith("2") %} class="served"{% endif %}>
+                <td>{{ code }}</td>
+                <td class="num">{{ count }}</td>
+                <td class="num">{{ "%.1f%%"|format(100 * count / total) if total else "—" }}</td>
+              </tr>
+            {% endfor %}
+          {% else %}
+            {% for cls in ["2xx", "3xx", "4xx", "5xx"] %}
+              {% set count = request_summary.by_class.get(cls, 0) %}
+              <tr{% if cls == "2xx" %} class="served"{% endif %}>
+                <td>{{ cls }}</td>
+                <td class="num">{{ count }}{{ plus }}</td>
+                <td class="num">{{ "%.1f%%"|format(100 * count / total) if total else "—" }}</td>
+              </tr>
+            {% endfor %}
+          {% endif %}
           <tr>
             <td><strong>Total</strong></td>
-            <td class="num"><strong>{{ request_summary.total }}{{ plus }}</strong></td>
+            <td class="num"><strong>{{ total }}{{ plus }}</strong></td>
+            <td class="num"></td>
           </tr>
-          {% for cls in ["2xx", "3xx", "4xx", "5xx"] %}
-            <tr>
-              <td>{{ cls }}</td>
-              <td class="num">{{ request_summary.by_class.get(cls, 0) }}{{ plus }}</td>
-            </tr>
-          {% endfor %}
         </tbody>
       </table>
+      {% set noise = request_summary.by_class.get("3xx", 0) + request_summary.by_class.get("4xx", 0) %}
+      {% if total and noise * 2 > total %}
+        <p class="meta">{{ "%.0f%%"|format(100 * noise / total) }} of requests were
+          redirects or misses — crawlers probing <code>http://</code> and scanning
+          for paths that don't exist. The 2xx row is the traffic that reached a page.</p>
+      {% endif %}
       {% if request_summary.truncated %}
         <p class="meta warn">Scan stopped at its budget before reaching the end
           of the window — these are lower bounds, not totals. Usually means a
           crawler is hammering the site.</p>
       {% endif %}
-      <p class="meta">From Cloud Logging — excludes /health/, /healthz, and
-        /tasks/refresh. Cached in-process for 5 minutes.</p>
+      {% if request_summary.source == "cloud-monitoring" %}
+        <p class="meta">Exact counts from Cloud Monitoring, aggregated
+          server-side. Cached in-process for 5 minutes.</p>
+      {% else %}
+        <p class="meta warn">Cloud Monitoring unavailable — counted by scanning
+          Cloud Logging instead, which is bounded and excludes /health/,
+          /healthz and /tasks/refresh. Cached in-process for 5 minutes.</p>
+      {% endif %}
     {% endif %}
 
     <h2>Event cache</h2>

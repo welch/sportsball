@@ -194,6 +194,7 @@ google-api-core==2.30.3 \
     #   google-cloud-core
     #   google-cloud-datastore
     #   google-cloud-logging
+    #   google-cloud-monitoring
     #   google-cloud-ndb
     #   google-cloud-storage
 google-auth==2.50.0 \
@@ -205,6 +206,7 @@ google-auth==2.50.0 \
     #   google-cloud-core
     #   google-cloud-datastore
     #   google-cloud-logging
+    #   google-cloud-monitoring
     #   google-cloud-storage
 google-cloud-appengine-logging==1.9.0 \
     --hash=sha256:bbf3a7e4dc171678f7f481259d1f68c3ae7d337530f1f2361f8a0b214dbcfe36 \
@@ -228,6 +230,10 @@ google-cloud-datastore==2.24.0 \
 google-cloud-logging==3.15.0 \
     --hash=sha256:72168a1e98bbfc27c75f0b8f630a7f5d786065f3f1f7e9e53d2d787a03693a4a \
     --hash=sha256:7dcc67434c4e7181510c133d5ac8fd4ce60c23fa4158661f67e54bf440c32450
+    # via sportsball
+google-cloud-monitoring==2.31.0 \
+    --hash=sha256:64f3d56ead48f0a0674f650cb2828c47b936582a02a27c55f2836681a86281c3 \
+    --hash=sha256:b4c9d3528c8643d4eb4b9d688cbb3c5914bc5f69b314ff7c5e1b47bdc073a9ae
     # via sportsball
 google-cloud-ndb==2.5.0 \
     --hash=sha256:d7a9baa912a9d3c4d76d5084d1ef34dc91613beee1412d5ebdb688f9834d5b69 \
@@ -310,6 +316,7 @@ grpcio==1.80.0 \
     #   google-cloud-appengine-logging
     #   google-cloud-datastore
     #   google-cloud-logging
+    #   google-cloud-monitoring
     #   googleapis-common-protos
     #   grpc-google-iam-v1
     #   grpcio-status
@@ -414,6 +421,7 @@ proto-plus==1.27.2 \
     #   google-cloud-appengine-logging
     #   google-cloud-datastore
     #   google-cloud-logging
+    #   google-cloud-monitoring
 protobuf==6.33.6 \
     --hash=sha256:0cd27b587afca21b7cfa59a74dcbd48a50f0a6400cfb59391340ad729d91d326 \
     --hash=sha256:77179e006c476e69bf8e8ce866640091ec42e1beb80b213c3900006ecfba6901 \
@@ -429,6 +437,7 @@ protobuf==6.33.6 \
     #   google-cloud-audit-log
     #   google-cloud-datastore
     #   google-cloud-logging
+    #   google-cloud-monitoring
     #   google-cloud-ndb
     #   googleapis-common-protos
     #   grpc-google-iam-v1

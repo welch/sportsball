@@ -68,13 +68,20 @@ class RequestSummary(BaseModel):
 
     total: int = 0
     by_class: dict[str, int] = Field(default_factory=dict)
+    # Exact status codes, when the source can supply them. Cloud Monitoring
+    # labels each series with `response_code`, so 404 and 405 arrive
+    # distinguishable; the log scan only ever populated classes. Empty when
+    # the fallback produced the summary.
+    by_code: dict[str, int] = Field(default_factory=dict)
     # Real page views: 2xx only. Excludes redirects (legacy-URL bot probes
     # bounce off the canonical 301 with no follow-up) and 4xx (mostly bots
     # scanning for /wp-admin/etc.). Vanity metric — the actual "how many
     # humans loaded my page" number.
     user_traffic: int = 0
     window_hours: int = 24
-    source: str = "cloud-logging"  # or "unavailable" when the query failed
+    # "cloud-monitoring" normally; "cloud-logging" when the metric query
+    # failed and the bounded scan stood in; "unavailable" when both did.
+    source: str = "cloud-monitoring"
     # True when the scan hit `_REQUEST_SCAN_MAX_ENTRIES` or its deadline and
     # stopped early. The counts are then floors, not totals — the template
     # renders them with a "+" so nobody reads a bounded scan as the real
@@ -173,6 +180,88 @@ def _logging_client() -> Any:
     return cloud_logging.Client()
 
 
+def _monitoring_client() -> Any:
+    # Deferred like the logging client, for the same reason: importing must
+    # not require GCP auth, and tests patch this.
+    from google.cloud import monitoring_v3
+
+    return monitoring_v3.MetricServiceClient()
+
+
+# The App Engine metric carrying one counter per HTTP response. Its labels are
+# `response_code` (the exact status) and `loading` (whether the request paid a
+# cold start). Note it is NOT `response_code_class`, which is what the metric
+# on the *Cloud Run* equivalent is called — grouping by that here silently
+# yields one unlabelled series.
+_RESPONSE_COUNT_METRIC = "appengine.googleapis.com/http/server/response_count"
+
+
+def _query_request_summary_monitoring(window_hours: int = 24) -> RequestSummary:
+    """Exact counts from Cloud Monitoring, aggregated server-side.
+
+    One request, one point per status code, no relationship between the cost
+    of this call and how much traffic there was — which is the whole point.
+    The log scan it replaces walked entries at ~2.75ms apiece, so a day of
+    crawler traffic put the real answer far outside any budget the page could
+    afford; measured on 2026-08-19, 6,017 entries took 23.5s to count.
+
+    Unlike the scan this cannot filter by URL — the metric carries no path
+    label — so operator endpoints are included. Measured over the same window,
+    they accounted for 0 of 6,017 requests, so the filter was excluding
+    nothing and its loss costs no fidelity.
+    """
+    import os
+
+    from google.cloud import monitoring_v3
+
+    project = os.environ.get("GOOGLE_CLOUD_PROJECT")
+    if not project:
+        raise RuntimeError("GOOGLE_CLOUD_PROJECT unset; cannot query monitoring")
+
+    now = datetime.now(UTC)
+    interval = monitoring_v3.TimeInterval(
+        end_time=now, start_time=now - timedelta(hours=window_hours)
+    )
+    # One alignment bucket spanning the whole window collapses each series to a
+    # single point, so the reducer hands back exactly one number per status.
+    aggregation = monitoring_v3.Aggregation(
+        alignment_period={"seconds": window_hours * 3600},
+        per_series_aligner=monitoring_v3.Aggregation.Aligner.ALIGN_SUM,
+        cross_series_reducer=monitoring_v3.Aggregation.Reducer.REDUCE_SUM,
+        group_by_fields=["metric.labels.response_code"],
+    )
+    series = _monitoring_client().list_time_series(
+        request={
+            "name": f"projects/{project}",
+            "filter": f'metric.type="{_RESPONSE_COUNT_METRIC}"',
+            "interval": interval,
+            "view": monitoring_v3.ListTimeSeriesRequest.TimeSeriesView.FULL,
+            "aggregation": aggregation,
+        }
+    )
+
+    by_code: dict[str, int] = {}
+    for ts in series:
+        code = ts.metric.labels.get("response_code")
+        if not code:
+            continue
+        by_code[code] = by_code.get(code, 0) + sum(int(p.value.int64_value) for p in ts.points)
+
+    by_class: dict[str, int] = {}
+    for code, count in by_code.items():
+        by_class[f"{code[0]}xx"] = by_class.get(f"{code[0]}xx", 0) + count
+
+    return RequestSummary(
+        total=sum(by_code.values()),
+        by_class=by_class,
+        by_code=dict(sorted(by_code.items())),
+        user_traffic=by_class.get("2xx", 0),
+        window_hours=window_hours,
+        source="cloud-monitoring",
+        truncated=False,
+    )
+
+
 def _query_request_summary(window_hours: int = 24) -> RequestSummary:
     """Single-shot Cloud Logging query — no caching, bounded work.
 
@@ -230,22 +319,36 @@ def _query_request_summary(window_hours: int = 24) -> RequestSummary:
 
 
 def request_summary(window_hours: int = 24) -> RequestSummary:
-    """Recent HTTP traffic from Cloud Logging, cached in-process for ~5 min.
+    """Recent HTTP traffic, cached in-process for ~5 min.
 
-    Returns an empty summary with `source="unavailable"` if the query fails
-    (no credentials, API down, etc.) so the health page degrades gracefully
-    rather than 500ing.
+    Cloud Monitoring first: exact, server-side aggregated, and costing the
+    same whether the site saw a hundred requests or a hundred thousand. The
+    bounded log scan stands in when that fails — it under-reports during a
+    traffic spike, which is when the page matters most, but a floor with a
+    warning beats no number at all.
+
+    Returns an empty summary with `source="unavailable"` only if both fail,
+    so the health page degrades rather than 500ing.
     """
     global _summary_cache
     now = time.time()
     with _lock:
         if _summary_cache is not None and now - _summary_cache[0] < _REQUEST_SUMMARY_TTL_SECONDS:
             return _summary_cache[1]
+
+    summary: RequestSummary | None = None
     try:
-        summary = _query_request_summary(window_hours=window_hours)
+        summary = _query_request_summary_monitoring(window_hours=window_hours)
     except Exception:
-        log.exception("cloud-logging request summary query failed")
-        return RequestSummary(window_hours=window_hours, source="unavailable")
+        # Expected while `roles/monitoring.viewer` is missing, and whenever the
+        # API is unreachable. Logged rather than raised so the scan can try.
+        log.exception("cloud-monitoring request summary query failed; falling back")
+        try:
+            summary = _query_request_summary(window_hours=window_hours)
+        except Exception:
+            log.exception("cloud-logging request summary query failed too")
+            return RequestSummary(window_hours=window_hours, source="unavailable")
+
     with _lock:
         _summary_cache = (now, summary)
     return summary

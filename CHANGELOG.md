@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The health page's traffic summary comes from Cloud Monitoring rather than a
+  Cloud Logging scan (#17). Logging has no server-side count, so the summary
+  was computed by walking entries at roughly 2.75ms apiece — measured on
+  2026-08-19, 6,017 entries took 23.5s. That is why the scan had to be bounded
+  to 5s, and why it under-reported precisely when traffic was interesting.
+  Monitoring aggregates server-side: one call, exact numbers, and the same
+  cost whether the window holds a hundred requests or a hundred thousand.
+
+  Two things about the metric differ from what the issue assumed. Its label is
+  `response_code` — the exact status — and not `response_code_class`, which is
+  the Cloud Run spelling; asking for the latter returns one unlabelled series
+  and silently collapses every count into a single bucket. And it carries no
+  URL label, so the scan's exclusion of `/health/`, `/healthz` and
+  `/tasks/refresh` cannot be reproduced. Measured over the same 24 hours,
+  those paths accounted for 0 of 6,017 requests, so nothing is lost.
+
+  The bounded scan stays as the fallback, and the page says which source it
+  used. Until `roles/monitoring.viewer` is granted to the App Engine service
+  account, the fallback is what runs.
+- The traffic table lists exact status codes with each one's share of the
+  total, and marks the rows that actually reached a page. Crawler redirects
+  and misses run 10-50x the 2xx count — 92% of requests over the last day —
+  which had buried the one number worth reading behind two larger ones.
+
 ### Fixed
 
 - `bin/deploy --help` printed `gcloud app deploy`'s manual. Everything that

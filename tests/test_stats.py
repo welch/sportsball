@@ -68,6 +68,118 @@ def _http_entry(status: int) -> MagicMock:
     return entry
 
 
+# --- Cloud Monitoring, the primary source ------------------------------------
+#
+# The log scan counts entries in Python at ~2.75ms each, so its cost tracks the
+# traffic it is measuring and it has to be bounded — which makes it least
+# accurate exactly when the page is most interesting. Monitoring aggregates
+# server-side: one call, exact numbers, same cost at any volume.
+
+
+def _series(code: str, value: int) -> MagicMock:
+    ts = MagicMock()
+    ts.metric.labels = {"response_code": code}
+    point = MagicMock()
+    point.value.int64_value = value
+    ts.points = [point]
+    return ts
+
+
+def _fake_monitoring(*series: MagicMock) -> MagicMock:
+    client = MagicMock()
+    client.list_time_series.return_value = list(series)
+    return client
+
+
+def test_monitoring_summary_buckets_exact_codes_into_classes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("GOOGLE_CLOUD_PROJECT", "test-project")
+    monkeypatch.setattr(
+        stats,
+        "_monitoring_client",
+        lambda: _fake_monitoring(
+            _series("200", 448), _series("204", 11), _series("302", 2155), _series("404", 2937)
+        ),
+    )
+
+    summary = stats.request_summary()
+    assert summary.source == "cloud-monitoring"
+    assert summary.truncated is False
+    assert summary.total == 5551
+    assert summary.by_class == {"2xx": 459, "3xx": 2155, "4xx": 2937}
+    # Exact codes survive, which classes alone cannot express.
+    assert summary.by_code["404"] == 2937
+    assert summary.user_traffic == 459
+
+
+def test_monitoring_summary_groups_by_response_code_not_class(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The App Engine metric labels series `response_code`. Asking for
+    `response_code_class` — the name on the Cloud Run equivalent, and the one
+    the original issue specified — returns a single unlabelled series, so every
+    count silently collapses into one bucket."""
+    monkeypatch.setenv("GOOGLE_CLOUD_PROJECT", "test-project")
+    client = _fake_monitoring(_series("200", 1))
+    monkeypatch.setattr(stats, "_monitoring_client", lambda: client)
+
+    stats.request_summary()
+    request = client.list_time_series.call_args.kwargs["request"]
+    assert request["aggregation"].group_by_fields == ["metric.labels.response_code"]
+    assert "response_count" in request["filter"]
+
+
+def test_monitoring_summary_needs_a_project(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Without a project there is nothing to query; it must fall through to the
+    scan rather than raising into the page."""
+    monkeypatch.delenv("GOOGLE_CLOUD_PROJECT", raising=False)
+    fake_client = MagicMock()
+    fake_client.list_entries.return_value = [_http_entry(200)]
+    monkeypatch.setattr(stats, "_logging_client", lambda: fake_client)
+
+    summary = stats.request_summary()
+    assert summary.source == "cloud-logging"
+    assert summary.total == 1
+
+
+def test_summary_falls_back_to_the_scan_when_monitoring_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Expected while the service account lacks roles/monitoring.viewer: a
+    bounded floor with a warning beats no number at all."""
+    monkeypatch.setenv("GOOGLE_CLOUD_PROJECT", "test-project")
+
+    def boom() -> object:
+        raise RuntimeError("permission denied")
+
+    monkeypatch.setattr(stats, "_monitoring_client", boom)
+    fake_client = MagicMock()
+    fake_client.list_entries.return_value = [_http_entry(200), _http_entry(404)]
+    monkeypatch.setattr(stats, "_logging_client", lambda: fake_client)
+
+    summary = stats.request_summary()
+    assert summary.source == "cloud-logging"
+    assert summary.total == 2
+    assert summary.by_code == {}
+
+
+def test_summary_is_unavailable_only_when_both_sources_fail(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("GOOGLE_CLOUD_PROJECT", "test-project")
+
+    def boom() -> object:
+        raise RuntimeError("nope")
+
+    monkeypatch.setattr(stats, "_monitoring_client", boom)
+    monkeypatch.setattr(stats, "_logging_client", boom)
+
+    summary = stats.request_summary()
+    assert summary.source == "unavailable"
+    assert summary.total == 0
+
+
 def test_request_summary_aggregates_cloud_logging_entries(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
