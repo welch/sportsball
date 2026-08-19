@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `bin/deploy --help` printed `gcloud app deploy`'s manual. Everything that
+  isn't `--refresh` is handed through untouched, and `--help` went with it —
+  so the one flag you'd be reaching for help to be reminded of was the one
+  flag the help you got couldn't mention. Both scripts now answer `--help`
+  and `-h` themselves, and say where gcloud's own help lives.
+- `bin/refresh` took no arguments and ignored whatever it was given, so
+  `bin/refresh --help` — the obvious thing to type when you want to know what
+  a script does — performed a production snapshot write instead of explaining
+  itself. It now prints usage for `--help`, and refuses anything else rather
+  than proceeding with a destructive default.
+
 ## [0.9.1] - 2026-08-19
 
 ### Fixed

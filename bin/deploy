@@ -13,11 +13,43 @@
 #
 # Pass --refresh to run `bin/refresh` once the deploy lands, forcing the
 # event snapshot to be rebuilt instead of waiting for the 6am cron. Any
-# other arguments are handed through to `gcloud app deploy`.
+# other arguments are handed through to `gcloud app deploy` — except
+# --help, which describes this wrapper rather than the command it wraps.
 
 set -e
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 cd "$(dirname "$0")/.."
+
+usage() {
+    cat <<'EOF'
+Usage: bin/deploy [--refresh] [gcloud app deploy flags...]
+
+Deploys app.yaml to App Engine with a version ID encoding the current git
+state — <tag>-<short-sha>[-dirty] — so the health page can report what is
+actually running. A bare `gcloud app deploy` takes a timestamp ID instead,
+which is itself a signal that this wrapper wasn't used.
+
+  --refresh     rebuild the event snapshot after a successful deploy,
+                rather than waiting for the 6am cron. Runs bin/refresh,
+                which writes the real production blob from your machine.
+  --help, -h    this text
+
+Anything else is passed through untouched; for those flags see
+`gcloud app deploy --help`.
+EOF
+}
+
+# Checked before anything is consumed or handed on: reaching for --help and
+# getting gcloud's manual instead of this one is a small betrayal, and the
+# thing you wanted to be reminded of is usually --refresh.
+for arg in "$@"; do
+    case "$arg" in
+        --help | -h)
+            usage
+            exit 0
+            ;;
+    esac
+done
 
 # Pull --refresh out of the argument list, leaving the rest for gcloud.
 # Rotating through "$@" rather than rebuilding a string keeps any argument

@@ -18,6 +18,43 @@
 set -e
 cd "$(dirname "$0")/.."
 
+usage() {
+    cat <<'EOF'
+Usage: bin/refresh
+
+Forces the daily event refresh now instead of waiting for the 6am cron:
+runs the app locally, sends the header App Engine's cron would send, and
+writes the resulting snapshot to Cloud Storage.
+
+This writes the REAL production blob — the adapters run on your machine and
+your credentials do the write. Run it after deploying, never before; a
+snapshot written by newer code can carry fields the deployed version does
+not understand. `bin/deploy --refresh` gets that order right.
+
+  --help, -h    this text
+
+  PORT=<n>      run the local server on a different port (default 8099)
+EOF
+}
+
+# This script takes no arguments, and used to ignore whatever it was given —
+# so `bin/refresh --help`, the most natural thing to type when you want to
+# know what it does, silently performed a production write instead. Refuse
+# anything unrecognised rather than proceeding with a destructive default.
+for arg in "$@"; do
+    case "$arg" in
+        --help | -h)
+            usage
+            exit 0
+            ;;
+        *)
+            echo "bin/refresh takes no arguments (got: $arg)" >&2
+            echo "Try 'bin/refresh --help'." >&2
+            exit 2
+            ;;
+    esac
+done
+
 PORT="${PORT:-8099}"
 
 # The app reads env.yaml itself at import, but resolve the bucket here too:
