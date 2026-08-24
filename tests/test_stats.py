@@ -328,18 +328,40 @@ def test_traffic_rows_share_is_none_when_nothing_was_served() -> None:
     assert all(r.share is None for r in rows)
 
 
-# --- Traffic by domain --------------------------------------------------
+# --- Page views by domain -----------------------------------------------
 #
 # One deployment answers to several domains, and the response_count metric
 # carries no host label — only `loading` and `response_code`. The request log
-# is the only source, and it has no server-side count, so this is a sample.
+# is the only source, and it has no server-side count.
+#
+# Restricting to 2xx is what makes counting the whole window affordable: barely
+# 630 of ~8,700 daily requests are 2xx. The first version instead sampled all
+# requests a fixed 1,000 lines deep, which reached back about two hours and, in
+# a quiet stretch, reported the two sites evenly matched on 15 page views
+# against 13 — when the day's real figures were 546 and 82.
 
 
-def _host_entry(host: str, status: int = 404) -> MagicMock:
+def _host_entry(host: str) -> MagicMock:
     entry = MagicMock()
-    entry.payload = {"host": host, "status": status}
+    entry.payload = {"host": host}
     entry.timestamp = datetime(2026, 8, 24, 12, 0, tzinfo=UTC)
     return entry
+
+
+def test_host_split_counts_only_successful_responses(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The 2xx restriction lives in the log filter, not in Python. Counting
+    client-side would mean paging through every crawler 404 to find the few
+    hundred entries worth having — the whole cost this avoids."""
+    fake_client = MagicMock()
+    fake_client.list_entries.return_value = [_host_entry("ismydayfucked.com")]
+    monkeypatch.setattr(stats, "_logging_client", lambda: fake_client)
+
+    stats.host_split(["ismydayfucked.com"])
+    call_filter = fake_client.list_entries.call_args.kwargs["filter_"]
+    assert "httpRequest.status>=200" in call_filter
+    assert "httpRequest.status<300" in call_filter
 
 
 def test_host_split_folds_www_onto_the_apex(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -354,12 +376,12 @@ def test_host_split_folds_www_onto_the_apex(monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setattr(stats, "_logging_client", lambda: fake_client)
 
     split = stats.host_split(["ismydayfucked.com", "ismydayhosed.fun"])
-    assert split.sampled == 3
-    assert [(s.host, s.requests) for s in split.shares] == [
+    assert split.page_views == 3
+    assert [(s.host, s.page_views) for s in split.shares] == [
         ("ismydayfucked.com", 2),
         ("ismydayhosed.fun", 1),
     ]
-    assert abs(split.shares[0].request_share - 2 / 3) < 1e-9
+    assert abs(split.shares[0].share - 2 / 3) < 1e-9
 
 
 def test_host_split_pools_unconfigured_domains(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -375,56 +397,31 @@ def test_host_split_pools_unconfigured_domains(monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setattr(stats, "_logging_client", lambda: fake_client)
 
     split = stats.host_split(["ismydayfucked.com", "ismydayhosed.fun"])
-    assert [(s.host, s.requests) for s in split.shares] == [
+    assert [(s.host, s.page_views) for s in split.shares] == [
         ("ismydayfucked.com", 1),
         ("other", 3),
     ]
 
 
-def test_host_split_counts_page_views_apart_from_requests(
+def test_host_split_covers_the_whole_window_when_it_can(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The two disagree, and the disagreement is the reason both are shown.
-    Crawlers pile onto whichever domain is in their index: measured against
-    production on 2026-08-24, the .com took 95% of requests (884 to 46) and
-    exactly half the page views (13 to 13). A request-only split would have
-    reported the quieter domain at 5% and been badly wrong about people.
-    """
+    """Not truncated means the counts are the window's real totals, and the
+    heading may name the window rather than the span it happened to reach."""
     fake_client = MagicMock()
-    fake_client.list_entries.return_value = [
-        *(_host_entry("ismydayfucked.com", 404) for _ in range(8)),
-        _host_entry("ismydayfucked.com", 200),
-        _host_entry("ismydayhosed.fun", 200),
-    ]
-    monkeypatch.setattr(stats, "_logging_client", lambda: fake_client)
-
-    split = stats.host_split(["ismydayfucked.com", "ismydayhosed.fun"])
-    loud, quiet = split.shares
-    assert (loud.requests, quiet.requests) == (9, 1)
-    assert abs(loud.request_share - 0.9) < 1e-9
-    # Same sample, opposite story.
-    assert (loud.page_views, quiet.page_views) == (1, 1)
-    assert loud.page_view_share == quiet.page_view_share == 0.5
-    assert split.page_views == 2
-
-
-def test_host_split_page_view_share_survives_a_sample_with_none(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """All-crawler samples happen at 4am. Dividing by zero must not take the
-    page down with it."""
-    fake_client = MagicMock()
-    fake_client.list_entries.return_value = [_host_entry("ismydayfucked.com", 404)]
+    fake_client.list_entries.return_value = [_host_entry("ismydayfucked.com")]
     monkeypatch.setattr(stats, "_logging_client", lambda: fake_client)
 
     split = stats.host_split(["ismydayfucked.com"])
-    assert split.page_views == 0
-    assert split.shares[0].page_view_share == 0.0
+    assert split.truncated is False
+    assert split.window_minutes == stats.DEFAULT_WINDOW_MINUTES
+    assert split.window_label == "24 hours"
+    assert "timestamp>=" in fake_client.list_entries.call_args.kwargs["filter_"]
 
 
 def test_host_split_keeps_configured_order(monkeypatch: pytest.MonkeyPatch) -> None:
     """Configured order first, pool last — so the two rows worth comparing sit
-    next to each other however the sample came out."""
+    next to each other however the counts came out."""
     fake_client = MagicMock()
     fake_client.list_entries.return_value = [
         _host_entry("elsewhere.example"),
@@ -438,10 +435,11 @@ def test_host_split_keeps_configured_order(monkeypatch: pytest.MonkeyPatch) -> N
     assert [s.host for s in split.shares] == ["ismydayfucked.com", "ismydayhosed.fun", "other"]
 
 
-def test_host_split_stops_at_the_sample_size(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The whole point is a constant cost: an unbounded walk of a day's log is
-    the ~24s query this exists to avoid."""
-    monkeypatch.setattr(stats, "_HOST_SAMPLE_ENTRIES", 5)
+def test_host_split_flags_a_truncated_walk(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Past the cap the counts cover less than the window, and saying "last 24
+    hours" over a number that covers two would be the same mistake in a new
+    place — a partial count reported as a whole one."""
+    monkeypatch.setattr(stats, "_HOST_MAX_ENTRIES", 5)
     fake_client = MagicMock()
     fake_client.list_entries.return_value = (
         _host_entry("ismydayfucked.com") for _ in range(10_000)
@@ -449,14 +447,16 @@ def test_host_split_stops_at_the_sample_size(monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setattr(stats, "_logging_client", lambda: fake_client)
 
     split = stats.host_split(["ismydayfucked.com"])
-    assert split.sampled == 5
+    assert split.page_views == 5
+    assert split.truncated is True
+    # The span actually covered, for the heading to name instead.
+    assert split.since is not None
 
 
 def test_host_split_samples_the_newest_entries(monkeypatch: pytest.MonkeyPatch) -> None:
-    """`list_entries` defaults to ascending. Left at the default, a sample of
-    "the most recent 500" walks in from the far end of the retention window —
-    which on the first attempt returned an empty split, because entries that
-    old had aged out."""
+    """`list_entries` defaults to ascending. Left at the default, a walk of the
+    window starts at the far end of the retention period — which on the first
+    attempt returned an empty split, because entries that old had aged out."""
     fake_client = MagicMock()
     fake_client.list_entries.return_value = [_host_entry("ismydayfucked.com")]
     monkeypatch.setattr(stats, "_logging_client", lambda: fake_client)

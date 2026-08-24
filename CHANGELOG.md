@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.1] - 2026-08-25
+
+### Fixed
+
+- The domain split counts page views over the whole 24-hour window instead of
+  sampling all requests a fixed 1,000 lines deep. The sample reached back only
+  about two hours, and in a quiet stretch it found 15 page views on one domain
+  against 13 on the other and reported the two sites as evenly matched. Over
+  the full day it was 546 to 82. A fixed sample size makes the window shrink
+  exactly when traffic is heavy and the counts go thin exactly when it is
+  light, which is a bad property for both halves of the day.
+
+  Restricting the log filter to 2xx is what makes counting the whole window
+  affordable: barely 630 of ~8,700 daily requests are 2xx, so a day of page
+  views fits in a single 1,000-entry page, and the cost of the query is almost
+  entirely its first page either way. The counts now agree exactly with the
+  2xx total Cloud Monitoring reports, which is a useful cross-check given the
+  two come from unrelated APIs.
+
+  Past a 2,000-entry cap the walk covers less than the window; the counts are
+  then marked as floors and the heading names the span actually reached rather
+  than claiming the whole day.
+
+### Removed
+
+- The all-requests column from the domain split, which needed its own query to
+  keep. No great loss: crawlers pile onto whichever domain is in their index,
+  so that number largely maps crawler attention rather than people. It was
+  also the column that made the table look authoritative while the useful one
+  beside it rested on a couple of dozen observations.
+
 ## [0.11.0] - 2026-08-24
 
 ### Added

@@ -148,24 +148,25 @@
       {% endif %}
       {% if host_split.available %}
         {# Cloud Monitoring's metric has no host label, so this can only come
-           from the request log — which has no server-side count either. A
-           fixed-size sample of the most recent requests keeps the cost
-           constant; the split moves slowly enough that rough is enough.
-
-           Requests and page views get their own columns because they disagree
-           wildly: crawlers pile onto whichever domain is in their index, so
-           the request split is largely a map of crawler attention and says
-           little about which site people actually visit. #}
-        <h3>By domain{% if host_split.since %}
-          <span class="muted">since {{ (host_split.since|pt).strftime('%a %-I:%M %p %Z') }}</span>
-        {%- endif %}</h3>
+           from the request log. Filtering to 2xx is what makes a whole day
+           affordable — barely 630 of ~8,700 daily requests are 2xx — and it
+           counts the number worth having: an earlier version sampled all
+           requests a fixed 1000 lines deep, reached back two hours, and
+           reported the two sites as evenly matched on 15 views against 13
+           when the day's real figures were 546 and 82. #}
+        {% set split_plus = "+" if host_split.truncated else "" %}
+        <h3>By domain
+          <span class="muted">page views,
+            {%- if host_split.truncated and host_split.since %}
+              since {{ (host_split.since|pt).strftime('%a %-I:%M %p %Z') }}
+            {%- else %}
+              last {{ host_split.window_label }}
+            {%- endif %}</span></h3>
         <table>
           <thead>
             <tr>
               <th>Domain</th>
-              <th class="num">Requests</th>
-              <th class="num">Share</th>
-              <th class="num recent">Page views</th>
+              <th class="num">Page views</th>
               <th class="num">Share</th>
             </tr>
           </thead>
@@ -173,13 +174,8 @@
             {% for h in host_split.shares %}
               <tr>
                 <td>{{ h.host }}</td>
-                <td class="num">{{ h.requests }}</td>
-                <td class="num">{{ "%.0f%%"|format(100 * h.request_share) }}</td>
-                <td class="num recent">{{ h.page_views }}</td>
-                <td class="num">
-                  {%- if host_split.page_views %}{{ "%.0f%%"|format(100 * h.page_view_share) }}
-                  {%- else %}—{% endif -%}
-                </td>
+                <td class="num">{{ h.page_views }}{{ split_plus }}</td>
+                <td class="num">{{ "%.0f%%"|format(100 * h.share) }}</td>
               </tr>
             {% endfor %}
           </tbody>

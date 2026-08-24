@@ -1580,6 +1580,14 @@ def test_health_shows_both_windows_in_one_table(monkeypatch: pytest.MonkeyPatch)
     assert "1200" in body
 
 
+def _domain_heading(body: str) -> str:
+    """The `By domain` heading alone. Assertions about what it says have to be
+    scoped to it — the page-views line further up uses the same words."""
+    match = re.search(r"<h3>By domain.*?</h3>", body, re.S)
+    assert match, "no `By domain` heading in the rendered page"
+    return match.group(0)
+
+
 def test_health_splits_traffic_across_the_configured_domains(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1592,23 +1600,44 @@ def test_health_splits_traffic_across_the_configured_domains(
         stats,
         "host_split",
         lambda hosts: stats.HostSplit(
-            shares=[
-                stats.HostShare(
-                    host=h, requests=10, request_share=0.5, page_views=3, page_view_share=0.5
-                )
-                for h in hosts
-            ],
+            shares=[stats.HostShare(host=h, page_views=3, share=0.5) for h in hosts],
             page_views=6,
-            sampled=20,
-            since=datetime(2026, 8, 24, 11, 0, tzinfo=PT),
         ),
     )
     body = main.app.test_client().get("/health/t0ken").data.decode()
     assert "ismydayfucked.com" in body
     assert "ismydayhosed.fun" in body
-    # How far back a fixed number of log lines reached is the one thing the
-    # reader can't infer from the table, so it belongs in the heading.
-    assert "since Mon 11:00 AM" in body
+    # A complete walk names the window, since the counts really do cover it.
+    # Scoped to the heading: the page-views summary above says "last 24 hours"
+    # too, so a whole-body match would pass whatever the heading rendered.
+    assert "last 24 hours" in _domain_heading(body)
+
+
+def test_health_names_the_span_a_truncated_split_actually_covered(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Counts that stopped at the cap cover less than the window. Labelling
+    them "last 24 hours" would repeat, in the heading, the error that made the
+    first version of this table wrong: a partial count read as a whole one."""
+    monkeypatch.setenv("HEALTH_TOKEN", "t0ken")
+    monkeypatch.setenv("HOST_VERBS", "ismydayfucked.com=fucked")
+    monkeypatch.setattr(main, "_events", lambda: [])
+    monkeypatch.setattr(
+        stats,
+        "host_split",
+        lambda hosts: stats.HostSplit(
+            shares=[stats.HostShare(host="ismydayfucked.com", page_views=2000, share=1.0)],
+            page_views=2000,
+            truncated=True,
+            since=datetime(2026, 8, 24, 11, 0, tzinfo=PT),
+        ),
+    )
+    body = main.app.test_client().get("/health/t0ken").data.decode()
+    heading = _domain_heading(body)
+    assert "since Mon 11:00 AM" in heading
+    assert "last 24 hours" not in heading
+    # And the counts read as floors.
+    assert "2000+" in body
 
 
 def test_health_omits_the_split_when_the_sample_failed(

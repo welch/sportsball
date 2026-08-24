@@ -58,6 +58,14 @@ _REQUEST_SCAN_DEADLINE_SECONDS = 5.0
 _REQUEST_SCAN_MAX_ENTRIES = 20_000
 
 
+def _window_label(minutes: int) -> str:
+    """Human phrasing of a window, for headings and column titles."""
+    if minutes % 60:
+        return f"{minutes} min"
+    hours = minutes // 60
+    return "24 hours" if hours == 24 else f"{hours}h"
+
+
 class AdapterStats(BaseModel):
     """Snapshot of one adapter's most recent success and failure."""
 
@@ -96,10 +104,7 @@ class RequestSummary(BaseModel):
     @property
     def window_label(self) -> str:
         """Human phrasing of the window, for headings and column titles."""
-        if self.window_minutes % 60:
-            return f"{self.window_minutes} min"
-        hours = self.window_minutes // 60
-        return "24 hours" if hours == 24 else f"{hours}h"
+        return _window_label(self.window_minutes)
 
     def counts(self) -> dict[str, int]:
         """Per-status counts, keyed by exact code when the source had them."""
@@ -395,19 +400,31 @@ def _query_request_summary(window_minutes: int = DEFAULT_WINDOW_MINUTES) -> Requ
 #
 # Cloud Monitoring cannot answer this: `response_count` carries only `loading`
 # and `response_code`, and the `gae_app` resource has no host dimension. Only
-# the request log knows the host, and it has no server-side count — so this is
-# a sample, sized to a fixed number of lines rather than to a span of time.
+# the request log knows the host, and it has no server-side count.
 #
-# The cost is almost entirely the query's first page: measured against
-# production, the first page takes ~4s to arrive and the 500 entries on it then
-# parse in 0.02s. So the sample is as large as one page can carry.
+# This counts 2xx only, which is what makes counting the whole day affordable.
+# Of ~8,700 daily requests barely 630 are 2xx, so a day of page views fits in a
+# single 1000-entry page — and the cost of this query is almost entirely its
+# first page: measured against production, the first page takes ~4s to arrive
+# and the entries on it then parse in 0.02s.
 #
-# The deadline has to leave room for everything else /health does — two
-# Monitoring queries and a snapshot read — inside gunicorn's 30s timeout. A
-# 1000-line sample measured 7.6s against production; 10s is margin over that
-# without putting the worker anywhere near being killed, which is the failure
-# this endpoint has had once already.
-_HOST_SAMPLE_ENTRIES = 1000
+# The first version of this sampled all requests instead, a fixed 1000 lines
+# deep. That reached back only about two hours, and in a quiet stretch it found
+# 15 page views on one domain against 13 on the other and reported the two
+# sites as evenly matched. Over the full day it was 546 to 82. A fixed sample
+# size makes the window shrink exactly when traffic is heavy and the counts go
+# thin exactly when it is light, which is a bad property for both halves.
+#
+# What was lost with it is the split of *all* requests, which needed its own
+# query. No great loss: crawlers pile onto whichever domain is in their index,
+# so that number largely maps crawler attention rather than people.
+#
+# The cap is headroom, not a target — three times the observed daily volume.
+# Past it the counts become floors and the page says so. The deadline has to
+# leave room for everything else /health does (two Monitoring queries and a
+# snapshot read) inside gunicorn's 30s timeout, which is the failure this
+# endpoint has had once already.
+_HOST_MAX_ENTRIES = 2000
 _HOST_SAMPLE_DEADLINE_SECONDS = 10.0
 # `list_entries` defaults to ascending, which for "the most recent N" walks in
 # from the far end of the retention window — the first attempt at this sampled
@@ -418,34 +435,33 @@ _LOG_ORDER_DESCENDING = "timestamp desc"
 
 
 class HostShare(BaseModel):
-    """One domain's slice of a sampled stretch of traffic.
-
-    Requests and page views are counted separately because they disagree, and
-    the disagreement is the point: crawlers pile onto whichever domain is in
-    their index, so a split of all requests is mostly a map of crawler
-    attention. Measured 2026-08-24, the .com took 95% of requests and exactly
-    half the page views.
-    """
+    """One domain's share of the page views in the window."""
 
     host: str
-    requests: int
-    request_share: float
     page_views: int
-    page_view_share: float
+    share: float
 
 
 class HostSplit(BaseModel):
-    """Rough traffic split by domain, measured over a fixed-size sample."""
+    """Page views by domain over the request-summary window."""
 
     shares: list[HostShare] = Field(default_factory=list)
-    sampled: int = 0
     page_views: int = 0
-    # Oldest entry the sample reached, so the page can say how far back a
-    # fixed number of lines happened to stretch.
+    window_minutes: int = DEFAULT_WINDOW_MINUTES
+    # Oldest entry reached. Only interesting when `truncated` — otherwise it is
+    # just the window's own start, and the window is already named.
     since: datetime | None = None
+    # True when the cap or the deadline stopped the walk before the window did.
+    # The counts are then floors over a shorter span than advertised, and the
+    # page has to say which span, or it reports a fraction of a day as a day.
+    truncated: bool = False
     # False when the log query failed; the page then says nothing rather than
     # showing a split of zero requests as though it meant something.
     available: bool = True
+
+    @property
+    def window_label(self) -> str:
+        return _window_label(self.window_minutes)
 
 
 def _normalize_host(host: str, known: Iterable[str]) -> str:
@@ -467,13 +483,15 @@ def _cache_host_split(at: float, split: HostSplit) -> HostSplit:
     return split
 
 
-def host_split(known_hosts: Iterable[str]) -> HostSplit:
-    """Sample recent request logs and apportion them across `known_hosts`.
+def host_split(
+    known_hosts: Iterable[str], window_minutes: int = DEFAULT_WINDOW_MINUTES
+) -> HostSplit:
+    """Page views per domain over `window_minutes`, from the request log.
 
-    Deliberately a sample of the most recent requests rather than of the whole
-    window — a uniform day-wide sample would need the full scan this exists to
-    avoid. Cached like the summaries; two seconds of log walking is not
-    something to repeat on every reload.
+    Walks the whole window rather than a fixed number of lines, which the 2xx
+    filter makes affordable: a day of page views is a few hundred entries, not
+    a few thousand. Cached like the summaries — several seconds of log walking
+    is not something to repeat on every reload.
     """
     now = time.time()
     with _lock:
@@ -484,22 +502,24 @@ def host_split(known_hosts: Iterable[str]) -> HostSplit:
 
     known = list(known_hosts)
     # Bounded below as well as ordered: without a timestamp floor the backend
-    # has the whole retention window to consider, and the sample is meant to
-    # describe traffic now.
-    cutoff = datetime.now(UTC) - timedelta(minutes=DEFAULT_WINDOW_MINUTES)
+    # has the whole retention window to consider.
+    cutoff = datetime.now(UTC) - timedelta(minutes=window_minutes)
     cutoff_iso = cutoff.replace(microsecond=0, tzinfo=None).isoformat() + "Z"
-    filter_ = f'resource.type="gae_app" timestamp>="{cutoff_iso}" httpRequest.status>0'
-    requests: dict[str, int] = {}
+    filter_ = (
+        f'resource.type="gae_app" timestamp>="{cutoff_iso}" '
+        "httpRequest.status>=200 httpRequest.status<300"
+    )
     page_views: dict[str, int] = {}
-    sampled = 0
-    served = 0
+    counted = 0
+    truncated = False
     since: datetime | None = None
     deadline = time.monotonic() + _HOST_SAMPLE_DEADLINE_SECONDS
     try:
         for entry in _logging_client().list_entries(
             filter_=filter_, order_by=_LOG_ORDER_DESCENDING, page_size=1000
         ):
-            if sampled >= _HOST_SAMPLE_ENTRIES or time.monotonic() > deadline:
+            if counted >= _HOST_MAX_ENTRIES or time.monotonic() > deadline:
+                truncated = True
                 break
             # The App Engine request log puts the Host header in the proto
             # payload, not in `http_request` — which carries the full URL but
@@ -510,41 +530,34 @@ def host_split(known_hosts: Iterable[str]) -> HostSplit:
             host = payload.get("host")
             if not host:
                 continue
-            sampled += 1
+            counted += 1
             since = getattr(entry, "timestamp", None) or since
             label = _normalize_host(host, known)
-            requests[label] = requests.get(label, 0) + 1
-            status = int(payload.get("status") or 0)
-            if 200 <= status < 300:
-                page_views[label] = page_views.get(label, 0) + 1
-                served += 1
+            page_views[label] = page_views.get(label, 0) + 1
     except Exception:
-        log.exception("host split sample failed")
+        log.exception("host split query failed")
         # Cached like a success: a source that is down should cost one slow
         # render every five minutes, not one on every reload.
         return _cache_host_split(now, HostSplit(available=False))
 
-    if not sampled:
+    if not counted:
         return _cache_host_split(now, HostSplit(available=False))
-    # Configured domains first in configured order, then the pool — so the two
-    # rows worth comparing sit next to each other however the sample came out.
-    order = [h for h in known if h in requests] + [h for h in requests if h not in set(known)]
+    if truncated:
+        log.warning("host split truncated at %d page views; counts are floors", counted)
+    # Configured domains first in configured order, then the pool — so the rows
+    # worth comparing sit next to each other however the counts came out.
+    order = [h for h in known if h in page_views] + [h for h in page_views if h not in set(known)]
     return _cache_host_split(
         now,
         HostSplit(
             shares=[
-                HostShare(
-                    host=h,
-                    requests=requests[h],
-                    request_share=requests[h] / sampled,
-                    page_views=page_views.get(h, 0),
-                    page_view_share=(page_views.get(h, 0) / served if served else 0.0),
-                )
+                HostShare(host=h, page_views=page_views[h], share=page_views[h] / counted)
                 for h in order
             ],
-            sampled=sampled,
-            page_views=served,
+            page_views=counted,
+            window_minutes=window_minutes,
             since=since,
+            truncated=truncated,
         ),
     )
 
