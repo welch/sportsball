@@ -1,4 +1,5 @@
 import time
+from datetime import UTC, datetime
 from unittest.mock import MagicMock
 
 import pytest
@@ -225,7 +226,7 @@ def test_request_summary_caches_query_result(
 ) -> None:
     calls = {"n": 0}
 
-    def fake_query(window_hours: int = 24) -> stats.RequestSummary:
+    def fake_query(window_minutes: int = 1440) -> stats.RequestSummary:
         calls["n"] += 1
         return stats.RequestSummary(total=1, by_class={"2xx": 1})
 
@@ -234,6 +235,274 @@ def test_request_summary_caches_query_result(
     stats.request_summary()
     stats.request_summary()
     assert calls["n"] == 1
+
+
+# --- Two windows -------------------------------------------------------
+#
+# Surges observed in Cloud Monitoring run about fifteen minutes. A 24-hour
+# count can't show one: by the time a spike is a visible fraction of a day's
+# traffic it is long over. The half-hour column is what the operator reads
+# after an alert email lands.
+
+
+def test_each_window_caches_separately(monkeypatch: pytest.MonkeyPatch) -> None:
+    """One shared cache slot would have the half-hour column serve the day's
+    numbers — the two would agree exactly, and always."""
+    asked: list[int] = []
+
+    def fake_query(window_minutes: int = 1440) -> stats.RequestSummary:
+        asked.append(window_minutes)
+        return stats.RequestSummary(total=window_minutes, window_minutes=window_minutes)
+
+    monkeypatch.setattr(stats, "_query_request_summary", fake_query)
+    day = stats.request_summary()
+    recent = stats.request_summary(window_minutes=stats.RECENT_WINDOW_MINUTES)
+    assert asked == [1440, 30]
+    assert day.total == 1440
+    assert recent.total == 30
+    # Second time round, both come from cache.
+    stats.request_summary()
+    stats.request_summary(window_minutes=stats.RECENT_WINDOW_MINUTES)
+    assert asked == [1440, 30]
+
+
+def test_short_window_expires_from_cache_sooner(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Five minutes of staleness is a sixth of a half hour. The column exists
+    to move; a day-length TTL would freeze it."""
+    assert stats._ttl_seconds(stats.RECENT_WINDOW_MINUTES) < stats._ttl_seconds(
+        stats.DEFAULT_WINDOW_MINUTES
+    )
+
+
+def test_monitoring_window_is_measured_in_minutes(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A 30-minute window asked for in whole hours rounds to 0 or 60 — either
+    an empty column or one silently counting twice its own span."""
+    monkeypatch.setenv("GOOGLE_CLOUD_PROJECT", "test-project")
+    client = _fake_monitoring(_series("200", 5))
+    monkeypatch.setattr(stats, "_monitoring_client", lambda: client)
+
+    summary = stats.request_summary(window_minutes=30)
+    request = client.list_time_series.call_args.kwargs["request"]
+    assert request["aggregation"].alignment_period.seconds == 1800
+    interval = request["interval"]
+    assert (interval.end_time - interval.start_time).total_seconds() == 1800
+    assert summary.window_minutes == 30
+    assert summary.window_label == "30 min"
+
+
+def test_traffic_rows_union_codes_across_both_windows() -> None:
+    """A code seen only in the last half hour is exactly the interesting one —
+    it must not be dropped because the day column has no entry for it."""
+    day = stats.RequestSummary(
+        total=100, by_code={"200": 90, "404": 10}, by_class={"2xx": 90, "4xx": 10}
+    )
+    recent = stats.RequestSummary(
+        total=7, by_code={"200": 2, "500": 5}, by_class={"2xx": 2, "5xx": 5}
+    )
+    rows = stats.traffic_rows(day, recent)
+    assert [r.label for r in rows] == ["200", "404", "500"]
+    by_label = {r.label: r for r in rows}
+    assert by_label["500"].count == 0
+    assert by_label["500"].recent == 5
+    assert by_label["404"].recent == 0
+    assert by_label["200"].share == 0.9
+    assert by_label["200"].served is True
+    assert by_label["404"].served is False
+
+
+def test_traffic_rows_fall_back_to_classes_for_both_columns() -> None:
+    """Mixing an exact-code column with a class column would put 404 and 4xx
+    on the same line and invite reading across them."""
+    day = stats.RequestSummary(total=10, by_class={"2xx": 10})
+    recent = stats.RequestSummary(total=3, by_code={"200": 3}, by_class={"2xx": 3})
+    rows = stats.traffic_rows(day, recent)
+    assert [r.label for r in rows] == ["2xx", "3xx", "4xx", "5xx"]
+    assert rows[0].count == 10
+    assert rows[0].recent == 3
+
+
+def test_traffic_rows_share_is_none_when_nothing_was_served() -> None:
+    """A quiet window must not divide by zero on the way to the page."""
+    empty = stats.RequestSummary()
+    rows = stats.traffic_rows(empty, empty)
+    assert all(r.share is None for r in rows)
+
+
+# --- Traffic by domain --------------------------------------------------
+#
+# One deployment answers to several domains, and the response_count metric
+# carries no host label — only `loading` and `response_code`. The request log
+# is the only source, and it has no server-side count, so this is a sample.
+
+
+def _host_entry(host: str, status: int = 404) -> MagicMock:
+    entry = MagicMock()
+    entry.payload = {"host": host, "status": status}
+    entry.timestamp = datetime(2026, 8, 24, 12, 0, tzinfo=UTC)
+    return entry
+
+
+def test_host_split_folds_www_onto_the_apex(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`www.` 301s to the apex before rendering anything, so counting it
+    separately would split one site's traffic across two rows."""
+    fake_client = MagicMock()
+    fake_client.list_entries.return_value = [
+        _host_entry("ismydayfucked.com"),
+        _host_entry("www.ismydayfucked.com"),
+        _host_entry("ismydayhosed.fun"),
+    ]
+    monkeypatch.setattr(stats, "_logging_client", lambda: fake_client)
+
+    split = stats.host_split(["ismydayfucked.com", "ismydayhosed.fun"])
+    assert split.sampled == 3
+    assert [(s.host, s.requests) for s in split.shares] == [
+        ("ismydayfucked.com", 2),
+        ("ismydayhosed.fun", 1),
+    ]
+    assert abs(split.shares[0].request_share - 2 / 3) < 1e-9
+
+
+def test_host_split_pools_unconfigured_domains(monkeypatch: pytest.MonkeyPatch) -> None:
+    """appspot.com alone would take second place on a table about which of the
+    two sites people actually visit."""
+    fake_client = MagicMock()
+    fake_client.list_entries.return_value = [
+        _host_entry("sports-ball.appspot.com"),
+        _host_entry("sports-ball.appspot.com"),
+        _host_entry("34.117.0.1"),
+        _host_entry("ismydayfucked.com"),
+    ]
+    monkeypatch.setattr(stats, "_logging_client", lambda: fake_client)
+
+    split = stats.host_split(["ismydayfucked.com", "ismydayhosed.fun"])
+    assert [(s.host, s.requests) for s in split.shares] == [
+        ("ismydayfucked.com", 1),
+        ("other", 3),
+    ]
+
+
+def test_host_split_counts_page_views_apart_from_requests(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The two disagree, and the disagreement is the reason both are shown.
+    Crawlers pile onto whichever domain is in their index: measured against
+    production on 2026-08-24, the .com took 95% of requests (884 to 46) and
+    exactly half the page views (13 to 13). A request-only split would have
+    reported the quieter domain at 5% and been badly wrong about people.
+    """
+    fake_client = MagicMock()
+    fake_client.list_entries.return_value = [
+        *(_host_entry("ismydayfucked.com", 404) for _ in range(8)),
+        _host_entry("ismydayfucked.com", 200),
+        _host_entry("ismydayhosed.fun", 200),
+    ]
+    monkeypatch.setattr(stats, "_logging_client", lambda: fake_client)
+
+    split = stats.host_split(["ismydayfucked.com", "ismydayhosed.fun"])
+    loud, quiet = split.shares
+    assert (loud.requests, quiet.requests) == (9, 1)
+    assert abs(loud.request_share - 0.9) < 1e-9
+    # Same sample, opposite story.
+    assert (loud.page_views, quiet.page_views) == (1, 1)
+    assert loud.page_view_share == quiet.page_view_share == 0.5
+    assert split.page_views == 2
+
+
+def test_host_split_page_view_share_survives_a_sample_with_none(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """All-crawler samples happen at 4am. Dividing by zero must not take the
+    page down with it."""
+    fake_client = MagicMock()
+    fake_client.list_entries.return_value = [_host_entry("ismydayfucked.com", 404)]
+    monkeypatch.setattr(stats, "_logging_client", lambda: fake_client)
+
+    split = stats.host_split(["ismydayfucked.com"])
+    assert split.page_views == 0
+    assert split.shares[0].page_view_share == 0.0
+
+
+def test_host_split_keeps_configured_order(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Configured order first, pool last — so the two rows worth comparing sit
+    next to each other however the sample came out."""
+    fake_client = MagicMock()
+    fake_client.list_entries.return_value = [
+        _host_entry("elsewhere.example"),
+        _host_entry("ismydayhosed.fun"),
+        _host_entry("ismydayhosed.fun"),
+        _host_entry("ismydayfucked.com"),
+    ]
+    monkeypatch.setattr(stats, "_logging_client", lambda: fake_client)
+
+    split = stats.host_split(["ismydayfucked.com", "ismydayhosed.fun"])
+    assert [s.host for s in split.shares] == ["ismydayfucked.com", "ismydayhosed.fun", "other"]
+
+
+def test_host_split_stops_at_the_sample_size(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The whole point is a constant cost: an unbounded walk of a day's log is
+    the ~24s query this exists to avoid."""
+    monkeypatch.setattr(stats, "_HOST_SAMPLE_ENTRIES", 5)
+    fake_client = MagicMock()
+    fake_client.list_entries.return_value = (
+        _host_entry("ismydayfucked.com") for _ in range(10_000)
+    )
+    monkeypatch.setattr(stats, "_logging_client", lambda: fake_client)
+
+    split = stats.host_split(["ismydayfucked.com"])
+    assert split.sampled == 5
+
+
+def test_host_split_samples_the_newest_entries(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`list_entries` defaults to ascending. Left at the default, a sample of
+    "the most recent 500" walks in from the far end of the retention window —
+    which on the first attempt returned an empty split, because entries that
+    old had aged out."""
+    fake_client = MagicMock()
+    fake_client.list_entries.return_value = [_host_entry("ismydayfucked.com")]
+    monkeypatch.setattr(stats, "_logging_client", lambda: fake_client)
+
+    stats.host_split(["ismydayfucked.com"])
+    kwargs = fake_client.list_entries.call_args.kwargs
+    assert kwargs["order_by"] == "timestamp desc"
+    # And bounded below, so the backend isn't offered the whole retention window.
+    assert "timestamp>=" in kwargs["filter_"]
+
+
+def test_host_split_is_unavailable_when_the_log_query_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def boom() -> object:
+        raise RuntimeError("no logging")
+
+    monkeypatch.setattr(stats, "_logging_client", boom)
+    split = stats.host_split(["ismydayfucked.com"])
+    assert split.available is False
+    assert split.shares == []
+
+
+def test_host_split_is_unavailable_when_nothing_carried_a_host(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A split of zero requests renders as real zeros, which is worse than
+    saying nothing."""
+    bare = MagicMock()
+    bare.payload = None
+    fake_client = MagicMock()
+    fake_client.list_entries.return_value = [bare, bare]
+    monkeypatch.setattr(stats, "_logging_client", lambda: fake_client)
+
+    split = stats.host_split(["ismydayfucked.com"])
+    assert split.available is False
+
+
+def test_host_split_is_cached(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_client = MagicMock()
+    fake_client.list_entries.return_value = [_host_entry("ismydayfucked.com")]
+    monkeypatch.setattr(stats, "_logging_client", lambda: fake_client)
+
+    stats.host_split(["ismydayfucked.com"])
+    stats.host_split(["ismydayfucked.com"])
+    assert fake_client.list_entries.call_count == 1
 
 
 def test_request_summary_returns_unavailable_on_query_failure(

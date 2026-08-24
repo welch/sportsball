@@ -7,6 +7,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-08-24
+
+### Added
+
+- The health page's request table gains a second column counting the last 30
+  minutes alongside the last 24 hours. Surges observed in Cloud Monitoring run
+  about fifteen minutes; against a day's traffic a burst that size is a
+  rounding error, so the column that was supposed to show trouble was the one
+  guaranteed to hide it. Half an hour is wide enough to still hold a surge by
+  the time the alert email is read, and narrow enough that the surge dominates
+  the number. Each window caches separately — the short one for a minute
+  rather than five, since five minutes of staleness is a sixth of it.
+
+- A traffic split by domain on the health page, over the domains configured in
+  `HOST_VERBS` rather than a hardcoded list. Cloud Monitoring cannot supply
+  this — `response_count` carries only `loading` and `response_code`, and the
+  `gae_app` resource has no host dimension — so it is sampled from the request
+  log: the 1,000 most recent lines, which costs about the same whatever the
+  traffic, since nearly all of it is the query's first page.
+
+  Requests and page views get separate columns because they disagree, and the
+  disagreement is the finding. Measured 2026-08-24, `ismydayfucked.com` took
+  82% of requests to `ismydayhosed.fun`'s 5% — and 52% of page views to its
+  48%. Crawlers pile onto whichever domain is in their index, so a split of
+  all requests is largely a map of crawler attention and says almost nothing
+  about which site people visit. Reporting only the first column would have
+  put the quieter domain at a twentieth of the traffic, which is true and
+  thoroughly misleading.
+
+  `www.` folds into its apex, since it 301s there before rendering anything.
+  Anything that isn't a configured domain pools as "other" — the appspot
+  hostname alone would otherwise take second place on a table about which of
+  the two sites gets used.
+
+### Changed
+
+- Request windows are measured in minutes rather than hours throughout
+  `stats`, which is what admitting a sub-hour window required: asked in whole
+  hours, thirty minutes rounds to either nothing or to twice its own span.
+
+- Status shares below a tenth of a percent render as `<0.1%` rather than
+  `0.0%`, which contradicted the count sitting next to it.
+
+- Numeric column headers are right-aligned over their figures.
+
 ## [0.10.0] - 2026-08-19
 
 ### Changed

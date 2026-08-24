@@ -11,13 +11,15 @@
       h1 { font-size: 1.4em; margin: 0 0 .25em; }
       h2 { font-size: 1.1em; margin: 1.5em 0 .5em; border-bottom: 1px solid #ddd;
            padding-bottom: .25em; }
+      h3 { font-size: .95em; font-weight: 600; margin: 1.5em 0 0; color: #444; }
+      h3 .muted { font-weight: 400; }
       .meta { color: #666; font-size: .9em; }
       .meta.warn { color: #8a5300; }
       table { border-collapse: collapse; width: 100%; margin-top: .5em; }
       th, td { padding: .35em .6em; text-align: left; vertical-align: top;
                border-bottom: 1px solid #eee; }
       th { background: #f6f6f6; font-weight: 600; }
-      td.num { text-align: right; font-variant-numeric: tabular-nums; }
+      th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; }
       .adapter-name { font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
                       font-size: .92em; }
       .ok { color: #2a7a2a; }
@@ -30,6 +32,9 @@
          by 10-50x, so without a marker the row worth reading is just one line
          among many with a smaller number in it. */
       tr.served td { background: #f2f9f2; color: #2a7a2a; font-weight: 600; }
+      /* The half-hour column is a different measurement, not more of the same
+         one — rule it off so the eye doesn't read across into it by accident. */
+      th.recent, td.recent { border-left: 2px solid #ddd; }
     </style>
   </head>
   <body>
@@ -81,7 +86,7 @@
       </tbody>
     </table>
 
-    <h2>HTTP requests (last {{ request_summary.window_hours }}h)</h2>
+    <h2>HTTP requests</h2>
     {% if request_summary.source == "unavailable" %}
       <p class="muted">Both the Cloud Monitoring query and the Cloud Logging
         fallback failed — see server logs. The traffic count won't render until
@@ -90,44 +95,48 @@
       {# A truncated scan counted a prefix of the window, so every number
          here is a floor. Mark them all rather than quietly under-reporting. #}
       {% set plus = "+" if request_summary.truncated else "" %}
+      {% set recent_plus = "+" if recent_summary.truncated else "" %}
       {% set total = request_summary.total %}
       <p class="page-views"><strong>{{ request_summary.user_traffic }}{{ plus }}</strong>
-        page views (2xx) in the last {{ request_summary.window_hours }} hours.</p>
+        page views (2xx) in the last {{ request_summary.window_label }},
+        <strong>{{ recent_summary.user_traffic }}{{ recent_plus }}</strong>
+        in the last {{ recent_summary.window_label }}.</p>
       {# Crawler 3xx/4xx routinely run 10-50x the 2xx count, which buries the
          one number worth reading. Give every row its share of the total so
-         the noise reads as noise, and split the table so real traffic isn't
-         listed alongside it. #}
+         the noise reads as noise, and mark the rows that reached a page.
+
+         The short column is the one to read during an incident: surges last
+         about fifteen minutes, so by the time they show in the day column
+         they are already over. #}
       <table>
         <thead>
           <tr>
             <th>Status</th>
-            <th class="num">Count</th>
+            <th class="num">Last {{ request_summary.window_label }}</th>
             <th class="num">Share</th>
+            <th class="num recent">Last {{ recent_summary.window_label }}</th>
           </tr>
         </thead>
         <tbody>
-          {% if request_summary.by_code %}
-            {% for code, count in request_summary.by_code.items() %}
-              <tr{% if code.startswith("2") %} class="served"{% endif %}>
-                <td>{{ code }}</td>
-                <td class="num">{{ count }}</td>
-                <td class="num">{{ "%.1f%%"|format(100 * count / total) if total else "—" }}</td>
-              </tr>
-            {% endfor %}
-          {% else %}
-            {% for cls in ["2xx", "3xx", "4xx", "5xx"] %}
-              {% set count = request_summary.by_class.get(cls, 0) %}
-              <tr{% if cls == "2xx" %} class="served"{% endif %}>
-                <td>{{ cls }}</td>
-                <td class="num">{{ count }}{{ plus }}</td>
-                <td class="num">{{ "%.1f%%"|format(100 * count / total) if total else "—" }}</td>
-              </tr>
-            {% endfor %}
-          {% endif %}
+          {% for row in traffic_rows %}
+            <tr{% if row.served %} class="served"{% endif %}>
+              <td>{{ row.label }}</td>
+              <td class="num">{{ row.count }}{{ plus }}</td>
+              {# A row reading "4" next to "0.0%" contradicts itself. Anything
+                 present but under a tenth of a percent gets "<0.1%". #}
+              <td class="num">
+                {%- if row.share is none %}—
+                {%- elif row.count and row.share < 0.001 %}&lt;0.1%
+                {%- else %}{{ "%.1f%%"|format(100 * row.share) }}{% endif -%}
+              </td>
+              <td class="num recent">{{ row.recent }}{{ recent_plus }}</td>
+            </tr>
+          {% endfor %}
           <tr>
             <td><strong>Total</strong></td>
             <td class="num"><strong>{{ total }}{{ plus }}</strong></td>
             <td class="num"></td>
+            <td class="num recent"><strong>{{ recent_summary.total }}{{ recent_plus }}</strong></td>
           </tr>
         </tbody>
       </table>
@@ -135,20 +144,61 @@
       {% if total and noise * 2 > total %}
         <p class="meta">{{ "%.0f%%"|format(100 * noise / total) }} of requests were
           redirects or misses — crawlers probing <code>http://</code> and scanning
-          for paths that don't exist. The 2xx row is the traffic that reached a page.</p>
+          for paths that don't exist.</p>
       {% endif %}
-      {% if request_summary.truncated %}
+      {% if host_split.available %}
+        {# Cloud Monitoring's metric has no host label, so this can only come
+           from the request log — which has no server-side count either. A
+           fixed-size sample of the most recent requests keeps the cost
+           constant; the split moves slowly enough that rough is enough.
+
+           Requests and page views get their own columns because they disagree
+           wildly: crawlers pile onto whichever domain is in their index, so
+           the request split is largely a map of crawler attention and says
+           little about which site people actually visit. #}
+        <h3>By domain{% if host_split.since %}
+          <span class="muted">since {{ (host_split.since|pt).strftime('%a %-I:%M %p %Z') }}</span>
+        {%- endif %}</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Domain</th>
+              <th class="num">Requests</th>
+              <th class="num">Share</th>
+              <th class="num recent">Page views</th>
+              <th class="num">Share</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for h in host_split.shares %}
+              <tr>
+                <td>{{ h.host }}</td>
+                <td class="num">{{ h.requests }}</td>
+                <td class="num">{{ "%.0f%%"|format(100 * h.request_share) }}</td>
+                <td class="num recent">{{ h.page_views }}</td>
+                <td class="num">
+                  {%- if host_split.page_views %}{{ "%.0f%%"|format(100 * h.page_view_share) }}
+                  {%- else %}—{% endif -%}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% endif %}
+      {% if request_summary.truncated or recent_summary.truncated %}
         <p class="meta warn">Scan stopped at its budget before reaching the end
-          of the window — these are lower bounds, not totals. Usually means a
-          crawler is hammering the site.</p>
+          of the window — the numbers marked <code>+</code> are lower bounds,
+          not totals. Usually means a crawler is hammering the site.</p>
       {% endif %}
       {% if request_summary.source == "cloud-monitoring" %}
         <p class="meta">Exact counts from Cloud Monitoring, aggregated
-          server-side. Cached in-process for 5 minutes.</p>
+          server-side. The day column is cached in-process for 5 minutes, the
+          half-hour column for 1; the metric itself lands a minute or two
+          behind, so the newest minute is still arriving.</p>
       {% else %}
         <p class="meta warn">Cloud Monitoring unavailable — counted by scanning
           Cloud Logging instead, which is bounded and excludes /health/,
-          /healthz and /tasks/refresh. Cached in-process for 5 minutes.</p>
+          /healthz and /tasks/refresh.</p>
       {% endif %}
     {% endif %}
 

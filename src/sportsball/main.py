@@ -666,9 +666,10 @@ def about() -> str:
 def health(token: str) -> str:
     """Token-gated status page. Wrong token 404s — never reveals existence.
 
-    Renders an HTML snapshot of: per-adapter last success/failure, the
-    24-hour HTTP request counters, and current cache contents. Idle (no
-    auto-refresh); the user reloads when they want fresh numbers.
+    Renders an HTML snapshot of: per-adapter last success/failure, HTTP
+    request counters over the last day and the last half hour, and current
+    cache contents. Idle (no auto-refresh); the user reloads when they want
+    fresh numbers.
     """
     expected = os.environ.get("HEALTH_TOKEN")
     if not expected or token != expected:
@@ -690,6 +691,11 @@ def health(token: str) -> str:
     cached_events = _cache["events"] or []
     new_events = sorted(_cache["previously_unseen"] or [], key=lambda e: e.starts_at)
     version = _version_info()
+    # Two windows: the day for the trend, the half hour for reading the page
+    # after an alert email. Surges observed so far run ~15 minutes, short
+    # enough to vanish into a 24-hour count.
+    window_summary = stats.request_summary()
+    recent_summary = stats.request_summary(window_minutes=stats.RECENT_WINDOW_MINUTES)
     return render_template(
         "health.html",
         now=now,
@@ -700,7 +706,10 @@ def health(token: str) -> str:
         version_label=version.label,
         version_url=version.url,
         adapters=stats.adapter_stats(ADAPTER_NAMES),
-        request_summary=stats.request_summary(),
+        request_summary=window_summary,
+        recent_summary=recent_summary,
+        traffic_rows=stats.traffic_rows(window_summary, recent_summary),
+        host_split=stats.host_split(_host_verbs()),
         cache_event_count=len(cached_events),
         new_events=new_events,
         cache_fetched_at=cache_fetched_at,

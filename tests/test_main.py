@@ -53,7 +53,7 @@ def _stub_cloud_logging_query(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         stats,
         "_query_request_summary",
-        lambda window_hours=24: stats.RequestSummary(window_hours=window_hours),
+        lambda window_minutes=1440: stats.RequestSummary(window_minutes=window_minutes),
     )
 
 
@@ -1546,6 +1546,81 @@ def test_robots_txt_is_served_and_closes_the_operator_paths() -> None:
     assert "Disallow: /tasks/" in body
 
 
+def test_health_shows_both_windows_in_one_table(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The day column and the half-hour column have to be visibly different
+    numbers, or a wiring mistake that renders the same summary twice looks
+    exactly like a quiet half hour."""
+    monkeypatch.setenv("HEALTH_TOKEN", "t0ken")
+    monkeypatch.setattr(main, "_events", lambda: [])
+
+    def fake_query(window_minutes: int = 1440) -> stats.RequestSummary:
+        if window_minutes == stats.RECENT_WINDOW_MINUTES:
+            return stats.RequestSummary(
+                total=616,
+                by_code={"200": 11, "404": 605},
+                by_class={"2xx": 11, "4xx": 605},
+                user_traffic=11,
+                window_minutes=window_minutes,
+            )
+        return stats.RequestSummary(
+            total=1200,
+            by_code={"200": 400, "404": 800},
+            by_class={"2xx": 400, "4xx": 800},
+            user_traffic=400,
+            window_minutes=window_minutes,
+        )
+
+    monkeypatch.setattr(stats, "_query_request_summary", fake_query)
+    body = main.app.test_client().get("/health/t0ken").data.decode()
+    assert "Last 30 min" in body
+    assert "Last 24 hours" in body
+    # The surge: 605 misses in half an hour against 800 across the whole day.
+    assert "605" in body
+    assert "616" in body
+    assert "1200" in body
+
+
+def test_health_splits_traffic_across_the_configured_domains(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The domains come from HOST_VERBS, not a hardcoded list — adding a third
+    site should not require editing the health page."""
+    monkeypatch.setenv("HEALTH_TOKEN", "t0ken")
+    monkeypatch.setenv("HOST_VERBS", "ismydayfucked.com=fucked, ismydayhosed.fun=hosed")
+    monkeypatch.setattr(main, "_events", lambda: [])
+    monkeypatch.setattr(
+        stats,
+        "host_split",
+        lambda hosts: stats.HostSplit(
+            shares=[
+                stats.HostShare(
+                    host=h, requests=10, request_share=0.5, page_views=3, page_view_share=0.5
+                )
+                for h in hosts
+            ],
+            page_views=6,
+            sampled=20,
+            since=datetime(2026, 8, 24, 11, 0, tzinfo=PT),
+        ),
+    )
+    body = main.app.test_client().get("/health/t0ken").data.decode()
+    assert "ismydayfucked.com" in body
+    assert "ismydayhosed.fun" in body
+    # How far back a fixed number of log lines reached is the one thing the
+    # reader can't infer from the table, so it belongs in the heading.
+    assert "since Mon 11:00 AM" in body
+
+
+def test_health_omits_the_split_when_the_sample_failed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A split of nothing is worse than no split — it reads as real zeros."""
+    monkeypatch.setenv("HEALTH_TOKEN", "t0ken")
+    monkeypatch.setattr(main, "_events", lambda: [])
+    body = main.app.test_client().get("/health/t0ken").data.decode()
+    assert "By domain" not in body
+
+
 def test_health_marks_a_truncated_scan_as_a_floor(monkeypatch: pytest.MonkeyPatch) -> None:
     """A bounded scan under-counts by design. The page has to say so, or the
     operator reads a flood as a quiet day."""
@@ -1554,7 +1629,7 @@ def test_health_marks_a_truncated_scan_as_a_floor(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setattr(
         stats,
         "_query_request_summary",
-        lambda window_hours=24: stats.RequestSummary(
+        lambda window_minutes=1440: stats.RequestSummary(
             total=3000, by_class={"2xx": 2900}, user_traffic=2900, truncated=True
         ),
     )
@@ -1570,7 +1645,7 @@ def test_health_does_not_mark_a_complete_scan(monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.setattr(
         stats,
         "_query_request_summary",
-        lambda window_hours=24: stats.RequestSummary(
+        lambda window_minutes=1440: stats.RequestSummary(
             total=42, by_class={"2xx": 40}, user_traffic=40
         ),
     )
