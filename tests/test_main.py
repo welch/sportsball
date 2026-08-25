@@ -115,7 +115,37 @@ def test_index_today_giants_event(monkeypatch: pytest.MonkeyPatch, fixed_now: da
     assert b"8ball-yes-1.gif" in response.data
     assert b"halo-giants" in response.data
     assert b"halo-warriors" not in response.data
-    assert b'class="verb giants"' in response.data
+    assert b'class="verb"' in response.data
+
+
+def test_verb_and_date_are_black_whatever_the_day_holds(
+    monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
+) -> None:
+    """Hue lives on the ball, not on the headline.
+
+    The verb used to be colored when a single venue owned the day and left
+    black when two did — which made the busiest day of all render in the least
+    alarming way, and gave black two contradictory meanings: "nothing on" and
+    "everything on at once". One channel, one job: the halo says where, the
+    words stay black. A single-venue day is the case that used to be colored,
+    so it is the one worth pinning.
+    """
+    giants = _ev(
+        "New York Mets at San Francisco Giants",
+        "Oracle Park",
+        "2026-05-05T02:05:00+00:00",
+    )
+    monkeypatch.setattr(main, "_events", lambda: [giants])
+    response = main.app.test_client().get("/")
+    assert b'class="verb"' in response.data
+    assert b'class="page-date"' in response.data
+    for marker in (b"verb giants", b"verb warriors", b"page-date giants", b"page-date warriors"):
+        assert marker not in response.data
+    # The color it stopped carrying is still on the page, on the ball.
+    assert b"halo-giants" in response.data
+    # And venue and team names keep their inline color in the event list —
+    # that is a different channel and not what changed here.
+    assert b'class="giants">San Francisco Giants</span>' in response.data
 
 
 def test_index_today_both_venues_show_both_halos_and_neutral_verb(
@@ -135,7 +165,7 @@ def test_index_today_both_venues_show_both_halos_and_neutral_verb(
     response = main.app.test_client().get("/")
     assert b"halo-giants" in response.data
     assert b"halo-warriors" in response.data
-    # Both teams active → verb stays neutral, no team color class.
+    # The verb is black on every day; the two halos carry the color.
     assert b'class="verb giants"' not in response.data
     assert b'class="verb warriors"' not in response.data
 
@@ -155,7 +185,6 @@ def test_index_future_event(monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
     assert b"Philadelphia Phillies at " in response.data
     assert b'class="giants">San Francisco Giants</span>' in response.data
     assert b"8ball-no-1.gif" in response.data
-    # Verb color is only for today's events; not-fucked days have a neutral verb.
     assert b'class="verb giants"' not in response.data
     # No halo on future-event days either — bare 8-ball.
     assert b"halo-giants" not in response.data
@@ -235,23 +264,20 @@ def test_index_has_viewport_meta(monkeypatch: pytest.MonkeyPatch, fixed_now: dat
     assert b"width=device-width" in response.data
 
 
-def test_index_shows_page_date_with_day_color(
-    monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
-) -> None:
+def test_index_shows_page_date(monkeypatch: pytest.MonkeyPatch, fixed_now: datetime) -> None:
     today_event = _ev("Mets at Giants", "Oracle Park", "2026-05-05T02:05:00+00:00")
     monkeypatch.setattr(main, "_events", lambda: [today_event])
     response = main.app.test_client().get("/")
-    assert b'class="page-date giants"' in response.data
+    assert b'class="page-date"' in response.data
     assert b"Monday, May 4, 2026" in response.data
 
 
-def test_index_page_date_neutral_when_no_color(
+def test_index_page_date_is_black_on_an_empty_day(
     monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
 ) -> None:
     monkeypatch.setattr(main, "_events", lambda: [])
     response = main.app.test_client().get("/")
     assert b'class="page-date"' in response.data
-    # No color class appended when no events / mixed.
     assert b'class="page-date giants"' not in response.data
     assert b'class="page-date warriors"' not in response.data
 
@@ -663,9 +689,9 @@ def test_index_non_team_event_at_chase_uses_dashed_chase_ring(
     )
     monkeypatch.setattr(main, "_events", lambda: [concert])
     response = main.app.test_client().get("/")
+    # Hue still says Chase Center even though no home team is playing — on the
+    # ring, which is now the only place hue lives.
     assert b"ring-chase" in response.data
-    # Hue still says Chase Center even though no home team is playing.
-    assert b'class="verb warriors"' in response.data
     # No home game today → no solid glow anywhere.
     assert b"halo-warriors" not in response.data
     assert b"halo-giants" not in response.data
@@ -683,7 +709,6 @@ def test_index_non_team_event_at_oracle_uses_dashed_oracle_ring(
     monkeypatch.setattr(main, "_events", lambda: [concert])
     response = main.app.test_client().get("/")
     assert b"ring-oracle" in response.data
-    assert b'class="verb giants"' in response.data
     assert b"halo-giants" not in response.data
     assert b"ring-chase" not in response.data
 
@@ -717,7 +742,6 @@ def test_index_valkyries_count_as_a_home_team(
     monkeypatch.setattr(main, "_events", lambda: [valks])
     response = main.app.test_client().get("/")
     assert b"halo-warriors" in response.data
-    assert b'class="verb warriors"' in response.data
     assert b'class="warriors">Golden State Valkyries</span>' in response.data
     assert b"ring-chase" not in response.data
 
@@ -742,11 +766,9 @@ def test_index_home_game_and_other_event_at_same_venue_show_both_marks(
     response = main.app.test_client().get("/")
     assert b"halo-giants" in response.data
     assert b"ring-oracle" in response.data
-    # One venue owns the day, so the verb still takes its color.
-    assert b'class="verb giants"' in response.data
 
 
-def test_index_both_venues_active_gives_neutral_verb(
+def test_index_both_venues_active_show_both_marks(
     monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
 ) -> None:
     game = _ev(
@@ -763,9 +785,9 @@ def test_index_both_venues_active_gives_neutral_verb(
     )
     monkeypatch.setattr(main, "_events", lambda: [game, show])
     response = main.app.test_client().get("/")
+    # Two venues, two marks — and the verb black, as on every other day.
     assert b"halo-giants" in response.data
     assert b"ring-chase" in response.data
-    # Two venues → no single verb color.
     assert b'class="verb giants"' not in response.data
     assert b'class="verb warriors"' not in response.data
 
@@ -1026,7 +1048,7 @@ def test_host_verbs_unset_never_redirects(
     assert response.status_code == 200
 
 
-def test_index_warriors_colorized_and_blue_verb(
+def test_index_warriors_colorized_and_blue_halo(
     monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
 ) -> None:
     today_evt = _ev(
@@ -1039,7 +1061,6 @@ def test_index_warriors_colorized_and_blue_verb(
     assert b'class="warriors">Golden State Warriors</span>' in response.data
     assert b"halo-warriors" in response.data
     assert b"halo-giants" not in response.data
-    assert b'class="verb warriors"' in response.data
 
 
 # ---------------------------------------------------------------------------

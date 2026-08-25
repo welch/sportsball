@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The verb and the date line are black on every day. They used to take the
+  day's venue color when a single venue owned the day and stay black when two
+  did — which rendered the busiest day of all in the least alarming way, and
+  gave black two contradictory meanings: "nothing on" and "everything on at
+  once". Hue now lives on the ball alone, where it already answered the same
+  question without the ambiguity: one channel, one job.
+
+  Team and venue names keep their inline color in the event list. That is a
+  different channel — naming a thing rather than summarizing a day.
+
 ## [0.11.1] - 2026-08-25
 
 ### Fixed

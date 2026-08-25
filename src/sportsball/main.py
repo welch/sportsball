@@ -385,21 +385,6 @@ def _format_day_label(d: date, today: date) -> str:
     return d.strftime("%A, %b %-d")
 
 
-def _verb_color_class(today_events: list[Event]) -> str:
-    """Color the verb when one venue owns the day, neutral when both do.
-
-    Venue, not team — a concert at Oracle Park colors the verb orange for
-    the same reason it draws an orange ring: what wrecks your day is which
-    neighborhood fills up, not who's playing.
-    """
-    if not today_events:
-        return ""
-    venues = {e.venue for e in today_events}
-    if len(venues) != 1:
-        return ""
-    return VENUE_COLORS.get(next(iter(venues)), "")
-
-
 def _canonical_url(endpoint: str, **values: Any) -> str:
     """Absolute URL for `endpoint` on the host that should own this page.
 
@@ -466,7 +451,6 @@ def index(isodate: date | None = None) -> str:
         fucked=bool(status.today_events),
         status=status,
         halos=halos,
-        verb_class=_verb_color_class(status.today_events),
         quiet_label=quiet_label,
         next_event_label=next_event_label,
         calendar_url=url_for("month_calendar", ym=status.today.replace(day=1)),

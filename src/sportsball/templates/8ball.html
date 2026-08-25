@@ -21,7 +21,7 @@
   </head>
   <body>
     <main>
-      <h1>Is my day <span class="verb{% if verb_class %} {{ verb_class }}{% endif %}">{{ verb }}?</span></h1>
+      <h1>Is my day <span class="verb">{{ verb }}?</span></h1>
 
       <div class="ball-frame{% for h in halos %} {{ h }}{% endfor %}">
         {% set ball_src = vstatic('img/8ball-' + ('yes' if fucked else 'no') + '-1.gif') %}
@@ -31,7 +31,7 @@
              alt="" aria-hidden="true">
       </div>
 
-      <div class="page-date{% if verb_class %} {{ verb_class }}{% endif %}">
+      <div class="page-date">
         <a class="plain nav-link" href="{{ calendar_url }}"
            aria-label="See the whole month of {{ status.today.strftime('%B %Y') }}">
           <time datetime="{{ status.today.isoformat() }}">{{ status.today.strftime('%A, %B %-d, %Y') }}</time>
