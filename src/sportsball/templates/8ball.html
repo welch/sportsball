@@ -49,7 +49,14 @@
           {% endfor %}
         </ul>
         {% if quiet_label %}
-          <p>No peace and quiet until <time datetime="{{ status.next_quiet_date.isoformat() }}">{{ quiet_label }}</time>.</p>
+          {# A wait that ends by morning isn't a complaint. "No peace and quiet
+             until tomorrow" reads as a grievance about the next twelve hours;
+             said plainly, tomorrow is the good news. #}
+          {% if quiet_is_tomorrow %}
+            <p>All clear <time datetime="{{ status.next_quiet_date.isoformat() }}">tomorrow</time>.</p>
+          {% else %}
+            <p>No peace and quiet until <time datetime="{{ status.next_quiet_date.isoformat() }}">{{ quiet_label }}</time>.</p>
+          {% endif %}
         {% endif %}
       {% elif status.next_event_date %}
         <p class="verdict">All clear until <time datetime="{{ status.next_event_date.isoformat() }}">{{ next_event_label }}</time>:</p>

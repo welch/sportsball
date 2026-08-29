@@ -7,7 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-08-29
+
 ### Changed
+
+- A busy day whose next quiet day is tomorrow now reads "All clear tomorrow."
+  rather than "No peace and quiet until tomorrow." The old phrasing put a
+  grievance on a wait that is over by morning; the news it was delivering was
+  good. Every other distance keeps the original sentence — "until Thursday"
+  is a wait worth complaining about.
+
+  The tomorrow case is decided by comparing dates, not by matching the
+  rendered label, so the two sentences can be reworded independently. The
+  `<time datetime="...">` element survives in both.
 
 - The verb and the date line are black on every day. They used to take the
   day's venue color when a single venue owned the day and stay black when two

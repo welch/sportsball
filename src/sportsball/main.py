@@ -4,7 +4,7 @@ import os
 import random
 import threading
 import time
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from datetime import time as dtime
 from pathlib import Path
 from typing import Any, NamedTuple
@@ -443,6 +443,9 @@ def index(isodate: date | None = None) -> str:
     next_event_label = (
         _format_day_label(status.next_event_date, status.today) if status.next_event_date else None
     )
+    # Compared as dates rather than by matching the label string, so the two
+    # can be reworded independently.
+    quiet_is_tomorrow = status.next_quiet_date == status.today + timedelta(days=1)
     # Rings only reflect today's events — future-event days draw a bare ball.
     # See `aggregator.day_halos` for what the colors and textures mean.
     return render_template(
@@ -452,6 +455,7 @@ def index(isodate: date | None = None) -> str:
         status=status,
         halos=halos,
         quiet_label=quiet_label,
+        quiet_is_tomorrow=quiet_is_tomorrow,
         next_event_label=next_event_label,
         calendar_url=url_for("month_calendar", ym=status.today.replace(day=1)),
         canonical_url=(

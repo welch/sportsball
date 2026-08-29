@@ -613,15 +613,20 @@ def test_static_urls_carry_cache_bust_version(
     assert len(main.STATIC_HASH) >= 8
 
 
-def test_index_today_shows_quiet_until_line(
+def test_index_today_says_all_clear_when_the_quiet_day_is_tomorrow(
     monkeypatch: pytest.MonkeyPatch, fixed_now: datetime
 ) -> None:
+    """ "No peace and quiet until tomorrow" reads as a complaint about a wait
+    that is over by morning. Tomorrow gets the plain good news instead."""
     # Event today, next quiet day is tomorrow (5/5).
     today_evt = _ev("Mets at Giants", "Oracle Park", "2026-05-05T02:05:00+00:00")
     monkeypatch.setattr(main, "_events", lambda: [today_evt])
     response = main.app.test_client().get("/")
-    assert b"No peace and quiet until " in response.data
+    assert b"All clear " in response.data
     assert b">tomorrow<" in response.data
+    assert b"No peace and quiet" not in response.data
+    # The machine-readable date survives the rewording.
+    assert b'<time datetime="2026-05-05">tomorrow</time>' in response.data
 
 
 def test_index_today_quiet_until_uses_weekday(
